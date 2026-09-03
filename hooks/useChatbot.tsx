@@ -242,15 +242,17 @@ export const useChatbot = () => {
     useEffect(() => {
         // Function to initialize chat
         const initializeChat = async () => {
-            // Logic to set up initial chat state
-            // This includes setting up newChatRoom, currentSession, etc.
-            
             setBotLoading(true);
             if (chatId) {
                 if (typeof chatId === 'string') {
                     setNewChatRoom(chatId);
                     if (!currentSession) {
-                        startNewChat()
+                        const existingSessionId = getCurrentSessionId();
+                        if (existingSessionId) {
+                            await resumeSession(existingSessionId);
+                        } else {
+                            startNewChat();
+                        }
                     }
                 }
                 setBotLoading(false);
@@ -357,7 +359,7 @@ export const useChatbot = () => {
 
 
     useEffect(() => {
-        if (!initChat && JSModule && JSModule?.conversational && chatId) {
+        if (!initChat && !isCheckingSession && JSModule && JSModule?.conversational && chatId) {
             setInitChat(true);
             handleSubmit();
         } else {
