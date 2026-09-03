@@ -5,15 +5,25 @@ import { Loader, ErrorAlert } from '@/components/ui';
 import { getHistorySession } from '@/apiRequests';
 import { HistorySessionDetail, HistoryDocumentEntry, PastConversationProps } from '@/types/history';
 import { Message } from '@/types/chat';
+import { getCachedSessionMessages } from '@/utils/sessionMessagesCache';
 
 const noop = () => {};
 
 // Past session Q&A → the Message shape ChatMessages renders (read-only).
-const toHistoryMessages = (detail: HistorySessionDetail): Message[] =>
-    detail.chats.flatMap((chat) => [
+// History in Mongo only stores graphIds, not page-level source content, so
+// there's no real sourceDocs to show unless this tab already chatted in this
+// session earlier (see utils/sessionMessagesCache) — in that case reuse the
+// real messages; otherwise render without sourceDocs so no reference icon
+// shows, rather than a fake one.
+const toHistoryMessages = (detail: HistorySessionDetail): Message[] => {
+    const cached = getCachedSessionMessages(detail.sessionId);
+    if (cached) return cached.messages;
+
+    return detail.chats.flatMap((chat) => [
         { type: 'userMessage', message: chat.question, src: 'test' } as Message,
         { type: 'apiMessage', message: chat.answer, src: 'talkingDb', tokens: chat.tokens } as Message,
     ]);
+};
 
 // Sources list + read-only banner, shown after the messages.
 const Footer: React.FC<{ documents: HistoryDocumentEntry[] }> = ({ documents }) => (

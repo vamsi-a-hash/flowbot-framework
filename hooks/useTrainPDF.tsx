@@ -5,7 +5,8 @@ import ThemeContext from '@/contexts/ThemeContext';
 import { useRouter } from 'next/router';
 import { usePolling } from '@/hooks/usePolling';
 import { FileUploadStatus, SessionDocument } from '@/types/fileUploadStatus';
-import { getActiveProjectId, getCurrentSessionId, getJobSessionId, notifyGraphIdsChanged, SESSION_CHANGED_EVENT } from '@/utils/sessionJobs';
+import { getActiveProjectId, getCurrentSessionId, getJobSessionId, notifyGraphIdsChanged, SESSION_CHANGED_EVENT, RESUME_SESSION_EVENT } from '@/utils/sessionJobs';
+import type { HistoryDocumentEntry } from '@/types/history';
 import { toast } from 'react-toastify';
 
 /**
@@ -164,6 +165,36 @@ export const useTainPDF = () => {
         };
         window.addEventListener(SESSION_CHANGED_EVENT, onSessionChanged);
         return () => window.removeEventListener(SESSION_CHANGED_EVENT, onSessionChanged);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        // A resumed session's documents live in Mongo history, not under this
+        // tab's jobSessionId, so listSessionDocuments(jobSessionId) can't see
+        // them. When the resume event carries the session's document list,
+        // use it directly; only fall back to the jobSessionId lookup (e.g.
+        // brand-new chat, no history payload) when it doesn't.
+        const onSessionResumed = (e: Event) => {
+            const documents = (e as CustomEvent<HistoryDocumentEntry[] | null>).detail;
+            if (documents) {
+                setUploads([]);
+                setTrainingInProgress(false);
+                setDocumentList(
+                    documents
+                        .filter((doc) => doc.graphId)
+                        .map((doc) => ({
+                            jobId: doc.jobId,
+                            fileName: doc.name,
+                            fileSize: doc.size,
+                            graphId: doc.graphId,
+                        }))
+                );
+                return;
+            }
+            rehydrateSession();
+        };
+        window.addEventListener(RESUME_SESSION_EVENT, onSessionResumed);
+        return () => window.removeEventListener(RESUME_SESSION_EVENT, onSessionResumed);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

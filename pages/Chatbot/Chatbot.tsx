@@ -12,7 +12,6 @@ import { getDocumentTreeJSon } from '@/apiRequests/ttt';
 import { DocumentTreeData } from '@/types/documentTree';
 import SuggestedQueries from '@/modules/SuggestedQueries';
 import HistorySidebar from '@/modules/HistorySidebar';
-import PastConversation from '@/modules/PastConversation';
 import { HistorySessionSummary } from '@/types/history';
 import { listHistorySessions, updateSessionStatus } from '@/apiRequests';
 import { GRAPH_IDS_CHANGED_EVENT, getCurrentSessionId } from '@/utils/sessionJobs';
@@ -42,14 +41,13 @@ const Chatbot: React.FC = () => {
     setAuthError,
     namespace,
     startNewChat,
+    resumeSession,
     currentSession,
     selectedGraphIds,
     setSelectedGraphIds,
   } = useChatbot();
 
   const showHistory = !!JSModule?.showHistory;
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [pastConversationTokens, setPastConversationTokens] = useState<number | null>(null);
   const [historyReloadToken, setHistoryReloadToken] = useState(0);
   const [hasPriorSessions, setHasPriorSessions] = useState(false);
   const [sessions, setSessions] = useState<HistorySessionSummary[]>([]);
@@ -66,7 +64,8 @@ const Chatbot: React.FC = () => {
   }, []);
 
   const handleSelectSession = (sessionId: string) => {
-    setSelectedSessionId(sessionId === currentSession ? null : sessionId);
+    if (sessionId === currentSession) return;
+    resumeSession(sessionId);
   };
 
   const showNewChatTab = async () => {
@@ -91,7 +90,6 @@ const Chatbot: React.FC = () => {
       await updateSessionStatus(abandonedSessionId, 'INACTIVE');
       setSessions((prev) => prev.filter((s) => s.sessionId !== abandonedSessionId));
     }
-    setSelectedSessionId(null);
     startNewChat()
     await showNewChatTab()
     setHistoryReloadToken((t) => t + 1);
@@ -111,9 +109,9 @@ const Chatbot: React.FC = () => {
   }, [currentSession]);
 
   useEffect(() => {
-    if (!showHistory || selectedSessionId) return;
+    if (!showHistory) return;
     if (messages.length > 0) setHistoryReloadToken((t) => t + 1);
-  }, [messages.length, showHistory, selectedSessionId]);
+  }, [messages.length, showHistory]);
 
   const [leftPanelExpanded, setLeftPanelExpanded] = useState(true);
   const [showSuggestedQueries, setShowSuggestedQueries] = useState(true);
@@ -217,10 +215,9 @@ const Chatbot: React.FC = () => {
           onToggleManageProjects={() => setManageProjectsOpen((v) => !v)}
           sessions={sessions}
           setSessions={setSessions}
-          activeSessionId={selectedSessionId ?? currentSession}
+          activeSessionId={currentSession}
           onSelectSession={handleSelectSession}
           onNewChat={handleNewChat}
-          totalTokensOverride={selectedSessionId ? pastConversationTokens : undefined}
         />
         <div style={{
           flex: 1,
@@ -230,7 +227,7 @@ const Chatbot: React.FC = () => {
           {showHistory ? (
             leftPanelExpanded && (
               <HistorySidebar
-                selectedSessionId={selectedSessionId ?? currentSession}
+                selectedSessionId={currentSession}
                 onSelectSession={handleSelectSession}
                 onNewChat={handleNewChat}
                 reloadToken={historyReloadToken}
@@ -261,11 +258,7 @@ const Chatbot: React.FC = () => {
             }}>
 
               {
-                selectedSessionId ? (
-                  <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-                    <PastConversation sessionId={selectedSessionId} onTokensChange={setPastConversationTokens} />
-                  </div>
-                ) : activeTabName === 'documentTree' ? (
+                activeTabName === 'documentTree' ? (
                   <div
                     style={{
                       flex: 1,
@@ -360,7 +353,7 @@ const Chatbot: React.FC = () => {
                   </div>
                 )
               }
-              {JSModule?.drawerEnabled && !selectedSessionId && (
+              {JSModule?.drawerEnabled && (
                 <SidePanel
                   switchTab={switchTab}
                   open={open}

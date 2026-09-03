@@ -1,4 +1,5 @@
 import { listSessionDocuments } from '@/apiRequests/ttt';
+import type { HistoryDocumentEntry } from '@/types/history';
 
 const SESSION_ID_KEY = 'currentSessionId';
 const JOB_SESSION_KEY = 'jobSessionId';
@@ -6,10 +7,19 @@ const ACTIVE_PROJECT_KEY = 'activeProjectId';
 
 export const GRAPH_IDS_CHANGED_EVENT = 'graphids-changed';
 export const SESSION_CHANGED_EVENT = 'session-changed';
+export const RESUME_SESSION_EVENT = 'resume-session';
 
 export const notifyGraphIdsChanged = () => {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(new Event(GRAPH_IDS_CHANGED_EVENT));
+};
+
+// documents: the resumed session's already-trained documents (from Mongo
+// history), so the drawer can show them without depending on this tab's
+// jobSessionId, which never uploaded them.
+export const notifySessionResumed = (documents?: HistoryDocumentEntry[]) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(RESUME_SESSION_EVENT, { detail: documents ?? null }));
 };
 
 // ─── Session ID ───────────────────────────────────────────────────────────

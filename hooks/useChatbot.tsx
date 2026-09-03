@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useRouter } from 'next/router';
 import io from 'socket.io-client';
 import { Message, IReferences } from '@/types/chat';
 import {
     getDefaultPromptTemplate,
     resetPromptTemplate,
-    submitPromptTemplate
+    submitPromptTemplate,
+    getHistorySession
 } from '@/apiRequests';
 
 import type { Socket } from 'socket.io-client';
@@ -13,7 +14,8 @@ import ThemeContext from '@/contexts/ThemeContext';
 import { generateRandomString } from '@/utils/generateRandomeString';
 import { getDocumentNameAndPageNumber } from '@/utils/extractDocumentNameAndPage';
 import { GRAPH_IDS_CHANGED_EVENT, SESSION_CHANGED_EVENT } from '@/utils/sessionJobs';
-import { getCurrentSessionId, getGraphIds, setCurrentSessionId, resetJobSessionId, clearActiveProjectId } from '@/utils/sessionJobs';
+import { getCurrentSessionId, getGraphIds, setCurrentSessionId, resetJobSessionId, clearActiveProjectId, notifySessionResumed } from '@/utils/sessionJobs';
+import { cacheSessionMessages, getCachedSessionMessages } from '@/utils/sessionMessagesCache';
 import { listPublicNamespaces, listPublicNamespaceDocuments } from '@/apiRequests/ttt';
 import { NamespaceMode, PublicDocument, NamespaceState } from '@/types/namespace';
 // TODO(demo-seed): temporary frontend demo docs; remove once demo-library is seeded on the backend
@@ -42,6 +44,12 @@ export const useChatbot = () => {
     const [promptTemplate, setPromptTemplate] = useState<string>('');
     const [newChatRoom, setNewChatRoom] = useState<string>('');
     const [currentSession, setCurrentSession] = useState<string>('');
+    // bumped on every startNewChat/resumeSession so a response for the
+    // previously-active session can't be applied after the user has switched
+    const sessionEpochRef = useRef(0);
+    // graphIds pulled from this session's persisted Mongo documents on resume;
+    // merged with the live jobSessionId-derived cachedGraphIds at query time
+    const [seededGraphIds, setSeededGraphIds] = useState<string[]>([]);
     const [content, setContent] = useState('');
     const [open, setOpen] = useState(true);
     const [hiddenInput, setHiddenInput] = useState(false);
@@ -78,6 +86,7 @@ export const useChatbot = () => {
         const onSessionChanged = () => {
             setCachedGraphIds([]);
             setSelectedGraphIds([])
+            setSeededGraphIds([]);
             setHasPrivateDocs(false);
         };
         window.addEventListener(SESSION_CHANGED_EVENT, onSessionChanged);
@@ -124,7 +133,7 @@ export const useChatbot = () => {
     const resolveGraphIds = (): string[] =>
         namespaceMode === 'public' && demoActivated && activeDoc?.result_graph_id
             ? [activeDoc.result_graph_id]
-            : cachedGraphIds;
+            : Array.from(new Set([...seededGraphIds, ...cachedGraphIds]));
 
 
     const activateDemo = () => {
@@ -211,6 +220,24 @@ export const useChatbot = () => {
         }
     };
     const { messages, history } = messageState;
+
+    // Mirror every turn into this tab's session cache so its real sourceDocs
+    // (from /api/chat, not a reconstruction) are available if the user
+    // switches tabs and comes back — see utils/sessionMessagesCache.
+    // IMPORTANT: depends only on [messages, history], not currentSession.
+    // resumeSession() sets currentSession before its history fetch resolves,
+    // so there's a transitional render where currentSession already points
+    // at the new session but messageState still holds the outgoing session's
+    // messages. If currentSession were a dependency here, that render would
+    // re-fire this effect and cache the OLD messages under the NEW
+    // session's id — which resumeSession then reads back as a false cache
+    // hit, showing the wrong conversation.
+    useEffect(() => {
+        if (!currentSession || messages.length === 0) return;
+        cacheSessionMessages(currentSession, messages, history);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, history]);
+
     // Effect for initializing chat and socket
     useEffect(() => {
         // Function to initialize chat
@@ -472,6 +499,10 @@ export const useChatbot = () => {
                 }
             }
             setQuery('');
+            // captured now so we can tell, once the response comes back, whether
+            // the user has since switched to a different chat tab (startNewChat/
+            // resumeSession bump this) — if so, the response must be dropped
+            const myEpoch = sessionEpochRef.current;
             try {
                 // private mode -> session graph ids; public mode -> active demo doc graph
                 const allGraphIds = resolveGraphIds()
@@ -565,6 +596,12 @@ export const useChatbot = () => {
                     data = await response.json();
                 }
                 console.log("data", data)
+
+                if (myEpoch !== sessionEpochRef.current) {
+                    // switched to a different chat tab while this request was in
+                    // flight — do not apply a stale response to the live state
+                    return;
+                }
 
                 // it is the case user sent message to human agent;
                 if ( data?.messageHandovered) {
@@ -709,12 +746,12 @@ export const useChatbot = () => {
                         }));
                     }
                 } else {
-                    if (data.currentStep?.fullWidth) {
+                    if (data.currentStep.fullWidth) {
                         setRegistrationMessage(data.currentStep);
                         setIsSignupPage(true);
                         return;
                     }
-                    if (!data.hideAnswer && (data.currentStep?.answer || question) && !JSModule?.showUserResponseFirst) {
+                    if (!data.hideAnswer && (data.currentStep.answer || question) && !JSModule?.showUserResponseFirst) {
                         setMessageState((state: any) => ({
                             ...state,
                             messages: [
@@ -728,7 +765,7 @@ export const useChatbot = () => {
                             ],
                         }));
                     }
-                    if (data.currentStep?.update) {
+                    if (data.currentStep.update) {
                         JSModule?.leftPanelStateUpdate(+data.currentStep.header.step);
                     }
                     setIsSignupPage(false);
@@ -872,6 +909,7 @@ export const useChatbot = () => {
     };
 
     const startNewChat = () => {
+        sessionEpochRef.current += 1;
         const newSessionId = generateRandomString('session_', 9);
         setCurrentSession(newSessionId);
         setCurrentSessionId(newSessionId);
@@ -880,8 +918,48 @@ export const useChatbot = () => {
         setMessageState({ messages: [], history: [] });
         setReferences([]);
         setQuery('');
+        setSeededGraphIds([]);
+        setLoading(false);
         if (typeof window !== 'undefined') localStorage.removeItem('conversation_id');
         setRoomId('');
+    };
+    const resumeSession = async (sessionId: string) => {
+        sessionEpochRef.current += 1;
+        const myEpoch = sessionEpochRef.current;
+
+        setCurrentSession(sessionId);
+        setCurrentSessionId(sessionId);
+        setLoading(false);
+
+        const detail = await getHistorySession(sessionId);
+        if (!detail || myEpoch !== sessionEpochRef.current) return;
+
+        // This tab already has the real messages (with real sourceDocs, as
+        // returned by /api/chat) for this session — reuse them as-is.
+        // History in Mongo only stores graphIds, not page-level source
+        // content, so a session this tab has never chatted in renders
+        // without sourceDocs — no reference icon — rather than a fake one.
+        const cached = getCachedSessionMessages(sessionId);
+        const messages: Message[] = cached
+            ? cached.messages
+            : detail.chats.flatMap((chat) => [
+                { type: 'userMessage', message: chat.question, src: 'talkingDb' } as Message,
+                { type: 'apiMessage', message: chat.answer, src: 'talkingDb', tokens: chat.tokens } as Message,
+            ]);
+        const history: [string, string][] = cached
+            ? cached.history
+            : detail.chats.map((chat) => [chat.question, chat.answer]);
+        const graphIds = Array.from(new Set(detail.documents.map((doc) => doc.graphId).filter(Boolean)));
+
+        setMessageState({ messages, history });
+        setReferences([]);
+        setQuery('');
+        setSelectedGraphIds([]);
+        setSeededGraphIds(graphIds);
+        setHasPrivateDocs(graphIds.length > 0);
+        if (typeof window !== 'undefined') localStorage.removeItem('conversation_id');
+        setRoomId('');
+        notifySessionResumed(detail.documents);
     };
 
     return {
@@ -914,6 +992,7 @@ export const useChatbot = () => {
         namespace,
         currentSession,
         startNewChat,
+        resumeSession,
         selectedGraphIds,
         setSelectedGraphIds
     };
