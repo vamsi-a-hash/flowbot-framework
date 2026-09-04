@@ -105,7 +105,12 @@ export const UserHistoryModel =
  * Creates the history document for a session if it doesn't exist yet.
  * Called at the start of a chat request so subsequent pushes always find a doc.
  */
-export const upsertUserHistory = async (sessionId: string, chatbotId: string, email: string, userId: string) => {
+export const upsertUserHistory = async (
+    sessionId: string,
+    chatbotId: string,
+    email: string | null,
+    userId: mongoose.Types.ObjectId | null
+): Promise<IUserHistory> => {
     const update: any = {
         $currentDate: { updatedAt: true },
         $setOnInsert: { sessionId, chatbotId, createdAt: new Date() },
@@ -116,11 +121,13 @@ export const upsertUserHistory = async (sessionId: string, chatbotId: string, em
         update.$setOnInsert.email = null;
         update.$setOnInsert.userId = null;
     }
-    return UserHistoryModel.findOneAndUpdate({ sessionId }, update, {
-        new: true, upsert: true, setDefaultsOnInsert: true,
-    });
+    const result = await UserHistoryModel.findOneAndUpdate(
+        { sessionId },
+        update,
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return result as IUserHistory;
 };
-
 /**
  * Appends one Q&A pair to the session's chat array.
  * Only called after module.start() returns successfully in chat.ts.
