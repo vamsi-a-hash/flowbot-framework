@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'sessionId and jobId are required' });
         }
         try {
-            const email = await getVerifiedEmail(req);
+            const email = await getVerifiedEmail(req); // throws 401 if not authenticated
             await dbConnect();
             const { matched } = await pullDocumentEntry(sessionId, email, jobId);
             if (!matched) {
