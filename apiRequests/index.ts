@@ -232,6 +232,20 @@ export const getHistorySession = async (sessionId: string): Promise<HistorySessi
     }
 }
 
+export const removeHistoryDocument = async (sessionId: string, jobId: string): Promise<boolean> => {
+    try {
+        const res = await fetch('/api/history/document', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, jobId }),
+        });
+        return res.ok;
+    } catch (err) {
+        console.error('removeHistoryDocument failed:', err);
+        return false;
+    }
+};
+
 export const deleteHistorySession = async (
     sessionId: string
 ): Promise<{ ok: boolean; status?: number }> => {

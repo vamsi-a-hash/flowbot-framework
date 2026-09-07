@@ -1,10 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import dbConnect from '@/config/mongodb';
-import { upsertUserHistory, pushDocumentEntry } from '@/models/userHistoryModel';
+import { upsertUserHistory, pushDocumentEntry, pullDocumentEntry } from '@/models/userHistoryModel';
 import { getUserIdByEmail } from '@/models/userModel';
 import { getVerifiedEmail } from '@/utils/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method === 'DELETE') {
+        const { sessionId, jobId } = req.body || {};
+        if (!sessionId || !jobId) {
+            return res.status(400).json({ error: 'sessionId and jobId are required' });
+        }
+        try {
+            await dbConnect();
+            await pullDocumentEntry(sessionId, jobId);
+            return res.status(200).json({ success: true });
+        } catch (err: any) {
+            console.error('Failed to remove document from history:', err);
+            return res.status(500).json({ error: err.message || 'Something went wrong' });
+        }
+    }
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }

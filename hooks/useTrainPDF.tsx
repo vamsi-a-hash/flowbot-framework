@@ -8,6 +8,7 @@ import { FileUploadStatus, SessionDocument } from '@/types/fileUploadStatus';
 import { getActiveProjectId, getCurrentSessionId, getJobSessionId, notifyGraphIdsChanged, SESSION_CHANGED_EVENT, RESUME_SESSION_EVENT } from '@/utils/sessionJobs';
 import type { HistoryDocumentEntry } from '@/types/history';
 import { toast } from 'react-toastify';
+import { removeHistoryDocument } from '@/apiRequests';
 
 /**
  * Notify the server that a document has been processed and linked to this session.
@@ -445,6 +446,13 @@ export const useTainPDF = (activeSessionId?: string) => {
         setUploads((prev) => prev.filter((f) => f.jobId !== jobId));
         cancelledRef.current.delete(jobId);
         notifyGraphIdsChanged();
+
+        if (activeSessionId) {
+            removeHistoryDocument(activeSessionId, jobId).catch((err) =>
+                console.error('Failed to remove document from history (non-fatal):', err)
+            );
+        }
+
         toast('Document removed', { type: 'success' });
     };
 

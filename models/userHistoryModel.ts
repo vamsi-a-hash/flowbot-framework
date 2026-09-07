@@ -218,4 +218,17 @@ export const updateSessionStatus = async (
     );
 };
 
+export const pullDocumentEntry = async (
+    sessionId: string,
+    jobId: string
+): Promise<void> => {
+    await UserHistoryModel.findOneAndUpdate(
+        { sessionId },
+        {
+            $pull: { documents: { jobId } },
+            $currentDate: { updatedAt: true },
+        }
+    );
+};
+
 export default UserHistoryModel;
