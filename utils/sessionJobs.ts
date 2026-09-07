@@ -73,6 +73,17 @@ export const clearActiveProjectId = (): void => {
     sessionStorage.removeItem(ACTIVE_PROJECT_KEY);
 };
 
+export const clearCurrentSessionId = (): void => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(SESSION_ID_KEY);
+};
+
+export const rotateJobSessionId = (): void => {
+    if (typeof window === 'undefined') return;
+    const jobSessionId = crypto.randomUUID();
+    sessionStorage.setItem(JOB_SESSION_KEY, jobSessionId);
+};
+
 // ─── Graph IDs ────────────────────────────────────────────────────────────
 // Derived on demand from the backend's session document list (source of
 // truth) rather than tracked in a local sessionStorage array, so it stays

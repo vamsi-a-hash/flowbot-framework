@@ -11,6 +11,7 @@ export interface SideDrawerProps {
     hideDemoDocs?: boolean;
     selectedGraphIds: string[]
     setSelectedGraphIds: Dispatch<SetStateAction<string[]>>;
+    currentSession?: string; 
 }
 
 export interface DemoDocsSectionProps {

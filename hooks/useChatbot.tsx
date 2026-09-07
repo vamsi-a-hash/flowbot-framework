@@ -14,7 +14,7 @@ import ThemeContext from '@/contexts/ThemeContext';
 import { generateRandomString } from '@/utils/generateRandomeString';
 import { getDocumentNameAndPageNumber } from '@/utils/extractDocumentNameAndPage';
 import { GRAPH_IDS_CHANGED_EVENT, SESSION_CHANGED_EVENT } from '@/utils/sessionJobs';
-import { getCurrentSessionId, getGraphIds, setCurrentSessionId, resetJobSessionId, clearActiveProjectId, notifySessionResumed } from '@/utils/sessionJobs';
+import { getCurrentSessionId, getGraphIds, setCurrentSessionId, resetJobSessionId,rotateJobSessionId, clearActiveProjectId, notifySessionResumed, clearCurrentSessionId } from '@/utils/sessionJobs';
 import { cacheSessionMessages, getCachedSessionMessages } from '@/utils/sessionMessagesCache';
 import { listPublicNamespaces, listPublicNamespaceDocuments } from '@/apiRequests/ttt';
 import { NamespaceMode, PublicDocument, NamespaceState } from '@/types/namespace';
@@ -211,6 +211,9 @@ export const useChatbot = () => {
     const handleLogout = async () => {
         const response = await fetch(AUTH_SESSION_URL, { method: 'DELETE' });
         setIsLoggedIn(false);
+        clearCurrentSessionId();
+        resetJobSessionId();
+        clearActiveProjectId();
         if (JSModule?.handleHeaderPane) {
             JSModule.handleHeaderPane('logout');
         }
@@ -374,7 +377,7 @@ export const useChatbot = () => {
             window.handleHeaderPane = JSModule?.handleHeaderPane;
             window.handleLogout = handleLogout;
         }
-    }, [JSModule]);
+    }, [JSModule, isCheckingSession]);
 
     useEffect(() => {
         if (isLoggedIn && JSModule?.handleHeaderPane) {
@@ -929,12 +932,22 @@ export const useChatbot = () => {
         sessionEpochRef.current += 1;
         const myEpoch = sessionEpochRef.current;
 
+        rotateJobSessionId();
+        clearActiveProjectId();
+        setCachedGraphIds([]);
+        setSelectedGraphIds([]);
+        setSeededGraphIds([]);
+        setHasPrivateDocs(false);
+
         setCurrentSession(sessionId);
         setCurrentSessionId(sessionId);
         setLoading(false);
 
         const detail = await getHistorySession(sessionId);
-        if (!detail || myEpoch !== sessionEpochRef.current) return;
+        if (!detail || myEpoch !== sessionEpochRef.current) {
+            if (!detail && myEpoch === sessionEpochRef.current) startNewChat();
+            return;
+        }
 
         // This tab already has the real messages (with real sourceDocs, as
         // returned by /api/chat) for this session — reuse them as-is.

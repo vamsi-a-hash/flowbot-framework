@@ -111,19 +111,18 @@ export const upsertUserHistory = async (
     email: string | null,
     userId: mongoose.Types.ObjectId | null
 ): Promise<IUserHistory> => {
-    const update: any = {
-        $currentDate: { updatedAt: true },
-        $setOnInsert: { sessionId, chatbotId, createdAt: new Date() },
-    };
-    if (email) {
-        update.$set = { email, userId };
-    } else {
-        update.$setOnInsert.email = null;
-        update.$setOnInsert.userId = null;
+    const existing = await UserHistoryModel.findOne({ sessionId });
+    if (existing && existing.email !== email) {
+        throw { status: 403, message: 'Session does not belong to the authenticated user' };
     }
+
     const result = await UserHistoryModel.findOneAndUpdate(
         { sessionId },
-        update,
+        {
+            $set: { email, userId },
+            $currentDate: { updatedAt: true },
+            $setOnInsert: { sessionId, chatbotId, createdAt: new Date() },
+        },
         { new: true, upsert: true, setDefaultsOnInsert: true }
     );
     return result as IUserHistory;

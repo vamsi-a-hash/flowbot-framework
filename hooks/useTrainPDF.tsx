@@ -19,7 +19,7 @@ async function recordDocumentInHistory(
     graphId: string,
     chatbotId: string
 ): Promise<void> {
-    const sessionId = getCurrentSessionId();
+    const sessionId = file.sessionId;
     if (!sessionId || !graphId) return;
 
     try {
@@ -128,7 +128,7 @@ const toCompletedDocs = (data: any[]): SessionDocument[] =>
             fileSize: raw?.file_size, graphId: raw?.result_graph_id,
         }));
 
-export const useTainPDF = () => {
+export const useTainPDF = (activeSessionId?: string) => {
     const router = useRouter();
     const { JSModule } = useContext(ThemeContext);
     const [trainingInProgress, setTrainingInProgress] = useState(false);
@@ -175,10 +175,10 @@ export const useTainPDF = () => {
         // use it directly; only fall back to the jobSessionId lookup (e.g.
         // brand-new chat, no history payload) when it doesn't.
         const onSessionResumed = (e: Event) => {
+            jobSessionIdRef.current = getJobSessionId();
             const documents = (e as CustomEvent<HistoryDocumentEntry[] | null>).detail;
             if (documents) {
-                setUploads([]);
-                setTrainingInProgress(false);
+                setUploads((prev) => prev.filter((u) => u.phase !== 'done'));
                 setDocumentList(
                     documents
                         .filter((doc) => doc.graphId)
@@ -222,6 +222,7 @@ export const useTainPDF = () => {
                 jobId: raw?.job_id,
                 graphId: raw?.result_graph_id || '',
                 startedAt: Date.now(),
+                sessionId: getCurrentSessionId(),
             }));
 
         if (seeded.length) {
@@ -320,6 +321,7 @@ export const useTainPDF = () => {
             jobId: '',
             graphId: '',
             startedAt: Date.now(),
+            sessionId: getCurrentSessionId(),
         };
         if (validationError) {
             setUploads((prev: FileUploadStatus[]) => [
@@ -450,10 +452,13 @@ export const useTainPDF = () => {
         const f = uploads.find((f: FileUploadStatus) => f.jobId === jobId);
         return f ? f.phase === 'processing' : false;
     };
+    const visibleUploads = uploads.filter(
+        (f) => !f.sessionId || f.sessionId === activeSessionId
+    );
 
     return {
         documentList,
-        uploads,
+        uploads: visibleUploads,
         uploadConstraints,
         trainingInProgress,
         handleFileChange,

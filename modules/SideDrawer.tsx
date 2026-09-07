@@ -424,12 +424,13 @@ const DemoDocsSection: React.FC<DemoDocsSectionProps> = ({ styles, namespace, ha
     );
 };
 
-export const SidePanel: React.FC<SideDrawerProps> = ({ open, setOpen, namespace, switchTab, handleSuggestedQueries, hideDemoDocs, selectedGraphIds, setSelectedGraphIds }) => {
+export const SidePanel: React.FC<SideDrawerProps> = ({ open, setOpen, namespace, switchTab, handleSuggestedQueries, hideDemoDocs, selectedGraphIds, setSelectedGraphIds , currentSession,
+}) => {
     const { JSModule, styles } = useContext(ThemeContext);
     const {
         uploads, uploadConstraints, handleFileChange, handleFileDrop, cancelUpload, retryUpload, removeUpload, canCancel,
         documentList, loadingSessionDocuments, removeSessionDocument
-    } = useTainPDF();
+    } = useTainPDF(currentSession);
     const router = useRouter();
 
     const accept = uploadConstraints

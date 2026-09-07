@@ -357,6 +357,7 @@ const Chatbot: React.FC = () => {
                 <SidePanel
                   switchTab={switchTab}
                   open={open}
+                  currentSession={currentSession}
                   setOpen={setOpen}
                   namespace={namespace}
                   handleSuggestedQueries={handleSuggestedQueries} 
