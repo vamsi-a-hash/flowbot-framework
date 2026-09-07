@@ -11,10 +11,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'sessionId and jobId are required' });
         }
         try {
+            const email = await getVerifiedEmail(req);
             await dbConnect();
-            await pullDocumentEntry(sessionId, jobId);
+            const { matched } = await pullDocumentEntry(sessionId, email, jobId);
+            if (!matched) {
+                return res.status(404).json({ error: 'Session not found' });
+            }
             return res.status(200).json({ success: true });
         } catch (err: any) {
+            if (err.status) {
+                return res.status(err.status).json({ error: err.message });
+            }
             console.error('Failed to remove document from history:', err);
             return res.status(500).json({ error: err.message || 'Something went wrong' });
         }

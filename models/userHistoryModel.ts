@@ -220,15 +220,17 @@ export const updateSessionStatus = async (
 
 export const pullDocumentEntry = async (
     sessionId: string,
+    email: string,
     jobId: string
-): Promise<void> => {
-    await UserHistoryModel.findOneAndUpdate(
-        { sessionId },
+): Promise<{ matched: boolean }> => {
+    const result = await UserHistoryModel.findOneAndUpdate(
+        { sessionId, email },
         {
             $pull: { documents: { jobId } },
             $currentDate: { updatedAt: true },
         }
     );
+    return { matched: !!result };
 };
 
 export default UserHistoryModel;
