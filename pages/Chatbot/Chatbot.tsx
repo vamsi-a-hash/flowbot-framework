@@ -330,7 +330,7 @@ const Chatbot: React.FC = () => {
                   }}>
                     <div style={{
                       flex: 1,
-                      overflow: 'auto',
+                      overflow: 'hidden',
                     }}>
                       <ChatMessages
                         chatId={String(chatId)}
