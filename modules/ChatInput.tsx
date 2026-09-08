@@ -1,25 +1,12 @@
 import React, { useContext, useRef } from "react";
 import ThemeContext from "@/contexts/ThemeContext";
 import LoadingDots from "@/components/ui/LoadingDots";
-import { Message } from "@/types/chat";
-
-interface ChatInputProps {
-    onSubmit: () => void
-    typingState: boolean
-    query: string
-    loading: boolean
-    onChange: (val: string) => void
-    messages: Message[]
-    onAddClick?: () => void
-}
-
+import { ChatInputProps } from "@/types/chat";
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, typingState, query, loading, onChange, messages, onAddClick }) => {
 
     const { JSModule, styles } = useContext(ThemeContext);
-
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
-
 
     //prevent empty submissions
     const handleEnter = (e: any) => {
