@@ -19,6 +19,8 @@ const PublicChat: React.FC = () => {
         setOpen,
         references,
         chatId,
+        user,
+        handleLogout,
     } = useChatbot();
 
     const [messages, setMessages] = useState<any[]>([]);
@@ -65,6 +67,8 @@ const PublicChat: React.FC = () => {
                 <ChatHeader
                     drawerOpen={open}
                     onDrawerToggle={() => setOpen(!open)}
+                    user={user}
+                    onLogout={handleLogout}
                 />
                 <div style={{
                     flex: 1,

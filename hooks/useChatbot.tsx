@@ -153,6 +153,7 @@ export const useChatbot = () => {
     };
 
     const { JSModule, styles } = useContext(ThemeContext) || {};
+    const [user, setUser] = useState<{ name?: string; email?: string }>({});
 
     // Poll session status: fires on mount, on tab focus, and every 5 min while tab is visible.
     useEffect(() => {
@@ -162,8 +163,9 @@ export const useChatbot = () => {
             if (document.visibilityState !== 'visible') return;
             fetch(AUTH_SESSION_URL)
                 .then(r => r.json())
-                .then(({ isLoggedIn }) => {
+                .then(({ isLoggedIn, name, email }) => {
                     setIsLoggedIn(!!isLoggedIn);
+                    setUser({ name, email });
                     if (!initialised) {
                         setIsCheckingSession(false);
                         initialised = true;
@@ -270,23 +272,17 @@ export const useChatbot = () => {
     // here we will be updating the messages we are getting from api server through socket io
     useEffect(() => {
         const socket = io({
-          path: '/api/socket',
+            path: '/api/socket',
         });
         setRoomId(localStorage?.getItem('conversation_id') || '')
     
         socket.on('connect', () => {
-          console.log('Connected to websocket server for the messages from hcinbox');
-
-          if (roomId) {
-              socket.emit('joinRoom', roomId);
-          }
+            if (roomId) {
+                socket.emit('joinRoom', roomId);
+            }
         });
     
         socket.on('updateMessageState', (message) => {
-
-            console.log('yes we got emitted updateMessageState and now its in client');
-            console.log('message is', message);
-            
             setMessageState((state: any) => ({
                 ...state,
                 messages: [
@@ -303,7 +299,7 @@ export const useChatbot = () => {
         });
     
         return () => {
-          socket.disconnect();
+            socket.disconnect();
         };
     }, [roomId]);
 
@@ -311,21 +307,14 @@ export const useChatbot = () => {
     // Function to initialize socket
     const initializeSocket = async () => {
         // Logic to set up socket connection
-        console.log('socket base url____', JSModule?.socket_base_url)
         await fetch('/api/chat-socket');
         const newSocket = io(`${JSModule?.socket_base_url}`, { path: '/socket.io' });
 
-
-        console.log('current session----', currentSession);
-
-
         newSocket.on('connect', () => {
-            console.log('connected');
             newSocket.emit('join-room', currentSession);
         });
 
         newSocket.on('received-slack-message', (data: any) => {
-            console.log('slack-message received', data)
             setMessageState((state: any) => ({
                 ...state,
                 messages: [
@@ -343,13 +332,11 @@ export const useChatbot = () => {
         })
 
         newSocket.on('received-slack-user-typing', (data: any) => {
-            console.log('typing data received =>', data);
             setTypingState(true);
         })
 
         newSocket.on('close-socket-connection', (data: any) => {
             if (socketState) {
-                console.log('socket closed successfully', data)
                 setSocketState(false)
                 handleSubmit('dummy')
             }
@@ -452,14 +439,12 @@ export const useChatbot = () => {
     // Function to handle form submission
     const handleSubmit = async (value?: string, update: boolean = false, socketMode: boolean = false) => {
         setLoading(true);
-        console.log('socket status', socketState)
+
         if (socketMode) {
             setLoading(false)
         }
         if (socketState && !value) {
             setQuery('');
-            console.log('inside setSocket true', value)
-            console.log('inside setSocket query', query)
             await handleSocket(query);
             setLoading(false);
         } else {
@@ -469,7 +454,6 @@ export const useChatbot = () => {
             }
             if (!query && question && JSModule?.showRadioSelection) {
                 if (question) {
-                    console.log('questionm', question)
                     setMessageState((state: any) => ({
                         ...state,
                         messages: [
@@ -488,7 +472,6 @@ export const useChatbot = () => {
 
             if (query && JSModule?.showUserResponseFirst) {
                 if (question) {
-                    console.log('questionm', question)
                     setMessageState((state: any) => ({
                         ...state,
                         messages: [
@@ -526,7 +509,7 @@ export const useChatbot = () => {
                             conversation_id,
                             question,
                             // if no document have selected, senting all the available;
-                            graphIds: selectedGraphIds.length? selectedGraphIds: allGraphIds,
+                            graphIds: selectedGraphIds.length ? selectedGraphIds : allGraphIds,
                             history,
                             session: currentSessionId,
                             reqQuery: router.query,
@@ -538,6 +521,41 @@ export const useChatbot = () => {
                     fetch(AUTH_SESSION_URL, { method: 'DELETE' });
                     setIsLoggedIn(false);
                     setLoading(false);
+                    return;
+                }
+                if (response.status === 403) {
+                    let errorMessage = 'Access forbidden. Please try again later.';
+                    try {
+                        const contentType = response.headers.get('content-type') || '';
+                
+                        if (contentType.includes('application/json')) {
+                            const data = await response.json();
+                            errorMessage = data?.error || errorMessage;
+                        } else {
+                            const text = await response.text();
+                            if (text) {
+                                errorMessage = text;
+                            }
+                        }
+                    } catch {
+                        // keep the default fallback message.
+                    }
+                
+                    setLoading(false);
+                    setMessageState((state: any) => ({
+                        ...state,
+                        messages: [
+                            ...state.messages,
+                            {
+                                type: 'apiMessage',
+                                message: errorMessage,
+                                src: 'talkingDb',
+                                step: {},
+                                id: Math.random(),
+                            },
+                        ],
+                    }));
+
                     return;
                 }
                 if (!response.ok) {
@@ -606,23 +624,21 @@ export const useChatbot = () => {
                 console.log("data", data)
 
                 // it is the case user sent message to human agent;
-                if ( data?.messageHandovered) {
-                    console.log(`yess message is handovered`);
+                if (data?.messageHandovered) {
                     setLoading(false);
                     return
                 }
 
                 if (data?.conversationId) {
-                    console.log(`yes we got conversationId ${data?.conversationId}`);
                     localStorage.setItem("conversation_id", data?.conversationId)
                     setRoomId(data?.conversationId)
                 }
-                
+
                 const message: string = data?.errorMessage;
-                if ( message && message.includes('For more information,') ){
+                if (message && message.includes('For more information,')) {
                     const { documentName, pageNumbers } = getDocumentNameAndPageNumber(message)
                     pageNumbers?.map((pageNumber) => {
-                      setReferences((prev) => [ ...prev, { documentName, pageNumber: Number(pageNumber)}])
+                        setReferences((prev) => [...prev, { documentName, pageNumber: Number(pageNumber) }])
                     })
                 }
                 if (data?.redirect) {
@@ -771,26 +787,25 @@ export const useChatbot = () => {
                         JSModule?.leftPanelStateUpdate(+data.currentStep.header.step);
                     }
                     setIsSignupPage(false);
-                    const apiMessage = {
-                        message: data.text,
-                        src: data.src,
-                        step: data.currentStep || {},
-                        sourceDocs: data.sourceDocuments,
-                        tokens: data.tokens,
-                    };
-                    setMessageState((state: any) => ({
-                        ...state,
-                        messages: pushed
-                            ? state.messages.map((m: any) =>
-                                  m.id === streamId ? { ...m, ...apiMessage } : m
-                              )
-                            : [
-                                  ...state.messages,
-                                  { type: 'apiMessage', ...apiMessage, id: Math.random() },
-                              ],
-                        history: [...state.history, [question, data.text]],
-                    }));
-                    setActiveIndex(data.currentStep.id);
+                    if (data.text) {
+                        setMessageState((state: any) => ({
+                            ...state,
+                            messages: [
+                                ...state.messages,
+                                {
+                                    type: 'apiMessage',
+                                    message: data.text,
+                                    src: data.src,
+                                    step: data.currentStep || {},
+                                    sourceDocs: data.sourceDocuments,
+                                    tokens: data.tokens,
+                                    id: Math.random(),
+                                },
+                            ],
+                            history: [...state.history, [question, data.text]],
+                        }));
+                    }
+                    setActiveIndex(data.currentStep?.id);
                 }
 
                 if (data.currentStep?.inputHidden) {
@@ -980,8 +995,8 @@ export const useChatbot = () => {
         loading,
         botLoading,
         query,
-        JSModule, 
-        styles, 
+        JSModule,
+        styles,
         setQuery,
         open,
         setOpen,
@@ -992,10 +1007,11 @@ export const useChatbot = () => {
         handleFileUpload,
         updatePromptTemplate,
         resetPromptTemplateHandler,
-        references, 
+        references,
         setReferences,
         isLoggedIn,
         isCheckingSession,
+        user,
         hasOpenID,
         handleLogin,
         handleLogout,

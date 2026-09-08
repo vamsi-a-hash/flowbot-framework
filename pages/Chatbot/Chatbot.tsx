@@ -36,8 +36,10 @@ const Chatbot: React.FC = () => {
     chatId,
     isLoggedIn,
     isCheckingSession,
+    user,
     hasOpenID,
     handleLogin,
+    handleLogout,
     authError,
     setAuthError,
     namespace,
@@ -50,9 +52,9 @@ const Chatbot: React.FC = () => {
 
   const showHistory = !!JSModule?.showHistory;
   const [historyReloadToken, setHistoryReloadToken] = useState(0);
-  const [hasPriorSessions, setHasPriorSessions] = useState(false);
   const [sessions, setSessions] = useState<HistorySessionSummary[]>([]);
-  const handleSessionsCount = useCallback((n: number) => setHasPriorSessions(n > 0), []);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const hasPriorSessions = sessions.length > 0;
   const [manageProjectsOpen, setManageProjectsOpen] = useState(false);
   // bumped whenever indexing finishes so the drawer's counts and document
   // lists reflect the upload without the user reopening it
@@ -100,8 +102,8 @@ const Chatbot: React.FC = () => {
   const load = useCallback(async () => {
     const data = await listHistorySessions();
     setSessions(data);
-    handleSessionsCount(data.length);
-  }, [handleSessionsCount]);
+    setSessionsLoading(false);
+  }, []);
 
 
   useEffect(() => {
@@ -109,6 +111,11 @@ const Chatbot: React.FC = () => {
       showNewChatTab();
     }
   }, [currentSession]);
+
+  // token starts at 0 and only bumps after a change, so mount is covered by showNewChatTab
+  useEffect(() => {
+    if (historyReloadToken) load();
+  }, [historyReloadToken, load]);
 
   useEffect(() => {
     if (!showHistory) return;
@@ -227,6 +234,9 @@ const Chatbot: React.FC = () => {
           activeSessionId={currentSession}
           onSelectSession={handleSelectSession}
           onNewChat={handleNewChat}
+          totalTokensOverride={selectedSessionId ? pastConversationTokens : undefined}
+          user={user}
+          onLogout={handleLogout}
         />
         <div style={{
           flex: 1,
@@ -239,8 +249,9 @@ const Chatbot: React.FC = () => {
                 selectedSessionId={currentSession}
                 onSelectSession={handleSelectSession}
                 onNewChat={handleNewChat}
-                reloadToken={historyReloadToken}
-                onCountChange={handleSessionsCount}
+                sessions={sessions}
+                setSessions={setSessions}
+                loading={sessionsLoading}
               />
             )
           ) : leftPanelExpanded && JSModule?.leftPanelHtml ? (
@@ -332,7 +343,7 @@ const Chatbot: React.FC = () => {
                   }}>
                     <div style={{
                       flex: 1,
-                      overflow: 'auto',
+                      overflow: 'hidden',
                     }}>
                       <ChatMessages
                         chatId={String(chatId)}

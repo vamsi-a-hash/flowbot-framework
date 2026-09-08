@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Plus, MoreVertical, Trash2, Eye } from 'lucide-react';
-import { listHistorySessions, deleteHistorySession } from '@/apiRequests';
+import { deleteHistorySession } from '@/apiRequests';
 import { MenuItem, ConfirmDialog, EmptyState } from '@/components/ui';
 import { HistorySessionSummary, HistorySidebarProps } from '@/types/history';
 
@@ -16,27 +16,15 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
     selectedSessionId,
     onSelectSession,
     onNewChat,
-    reloadToken,
-    onCountChange,
+    sessions,
+    setSessions,
+    loading,
 }) => {
-    const [sessions, setSessions] = useState<HistorySessionSummary[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
     const [menuFor, setMenuFor] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<HistorySessionSummary | null>(null);
     const [deleting, setDeleting] = useState<boolean>(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
-
-    const load = useCallback(async () => {
-        const data = await listHistorySessions();
-        setSessions(data);
-        setLoading(false);
-        onCountChange?.(data.length);
-    }, [onCountChange]);
-
-    useEffect(() => {
-        load();
-    }, [load, reloadToken]);
 
     // Close the ⋮ menu when clicking outside it.
     useEffect(() => {
@@ -58,11 +46,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
         setDeleting(false);
         // 404 = already gone → treat as removed. Only a real failure (500/network) errors.
         if (ok || status === 404) {
-            setSessions((prev) => {
-                const next = prev.filter((s) => s.sessionId !== pendingDelete.sessionId);
-                onCountChange?.(next.length);
-                return next;
-            });
+            setSessions((prev) => prev.filter((s) => s.sessionId !== pendingDelete.sessionId));
             if (selectedSessionId === pendingDelete.sessionId) {
                 onNewChat(); // deleted the session we were viewing → back to live chat
             }

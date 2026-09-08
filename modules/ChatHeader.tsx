@@ -5,7 +5,6 @@ import ChevronDownIcon from '@/assets/svgs/ChevronDownIcon';
 import LogoutIcon from '@/assets/svgs/LogoutIcon';
 import ShareIcon from '@/assets/svgs/ShareIcon';
 import { ToggleButton } from '@/components/ui/Buttons/ToggleButton';
-import { useChatbot } from '@/hooks/useChatbot';
 import { toast } from 'react-toastify';
 import { getPublicChatLink, submitFeedback } from '@/apiRequests';
 import { getCurrentSessionId } from '@/utils/sessionJobs';
@@ -17,7 +16,7 @@ import FeedbackForm from '@/components/FeedbackForm';
 import { FeedbackPayload } from '@/types/feedback';
 import ChatTabs from './ChatTabs';
 
-export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDrawerToggle, leftPanelExpanded = true, onToggleLeftPanel, messages, manageProjectsOpen = false, onToggleManageProjects, sessions, setSessions, activeSessionId, onSelectSession, onNewChat, totalTokensOverride }) => {
+export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDrawerToggle, leftPanelExpanded = true, onToggleLeftPanel, messages, manageProjectsOpen = false, onToggleManageProjects, sessions, setSessions, activeSessionId, onSelectSession, onNewChat, totalTokensOverride, user = {}, onLogout }) => {
     const { JSModule, styles } = useContext(ThemeContext);
     const headerRef = useRef<HTMLDivElement>(null);
     const userMenuRef = useRef<HTMLDivElement>(null);
@@ -26,11 +25,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDr
     const [canShareChat, setCanShareChat] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-    const [user, setUser] = useState<{
-        name?: string;
-        email?: string;
-    }>({});
-    const { handleLogout } = useChatbot();
 
     // if messages contain at-least one message from user and bot;
     useEffect(() => {
@@ -122,21 +116,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDr
         };
     }, []);
 
-    useEffect(() => {
-        let cancelled = false;
-        fetch("/api/auth/session")
-            .then((r) => r.json())
-            .then((data: { name?: string; email?: string }) => {
-                if (cancelled) return;
-                setUser(data);
-            })
-            .catch(() => { });
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
     // Bot-level override: full custom header HTML
     if (JSModule?.headerPaneHtml) {
         return (
@@ -217,6 +196,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDr
                     <PanelIcon size={20} stroke={drawerOpen ? "#2563eb" : "#6b7280"} />
                 </button>
 
+                {/* logged-out visitors (e.g. a shared public chat) get no avatar and no sign-out */}
+                {user?.email && (
                 <div className="relative" ref={userMenuRef}>
                     <div
                         className="flex cursor-pointer select-none items-center gap-2 rounded-full border border-gray-200 px-2 py-1 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 overflow-visible"
@@ -241,7 +222,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDr
                         <div className="absolute right-0 top-14 z-[200] min-w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 ">
                             <button
                                 className="flex w-full items-center gap-2 bg-transparent px-4 py-2.5 text-left text-sm text-red-500 transition-colors duration-150 hover:bg-gray-50"
-                                onClick={handleLogout}
+                                onClick={onLogout}
                             >
                                 <LogoutIcon />
                                 Sign out
@@ -249,6 +230,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ drawerOpen = false, onDr
                         </div>
                     )}
                 </div>
+                )}
                 <div
                     ref={menuRef}
                     className='relative block'

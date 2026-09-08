@@ -1,3 +1,4 @@
+import { Dispatch, SetStateAction } from 'react';
 import { TokenUsage } from "./chat";
 
 export interface HistorySessionSummary {
@@ -39,8 +40,9 @@ export interface HistorySidebarProps {
     selectedSessionId: string | null;
     onSelectSession: (sessionId: string) => void;
     onNewChat: () => void;
-    reloadToken: number;
-    onCountChange?: (count: number) => void;
+    sessions: HistorySessionSummary[];
+    setSessions: Dispatch<SetStateAction<HistorySessionSummary[]>>;
+    loading: boolean;
 }
 
 export interface PastConversationProps {

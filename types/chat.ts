@@ -12,7 +12,7 @@ export interface TokenUsage {
 export type Message = {
   type: 'apiMessage' | 'userMessage';
   message: string;
-  src: 'test' | 'gpt4' | 'talkingDb' | ''
+  src: 'test' | 'gpt4' | 'talkingDb' | '';
   isStreaming?: boolean;
   sourceDocs?: Document[];
   step?: { [key: string]: any };
@@ -31,7 +31,7 @@ export type contextItemArray = contextItem[];
 
 export type Page = {
   page_number: string;
-  page_body: string
+  page_body: string;
 };
 
 export interface IReferences {
@@ -43,7 +43,9 @@ export interface LiveChatbot {
   file: string;
   url: string;
 }
-export type ChatbotsResponse = AxiosResponse<{data: LiveChatbot[]}>;
+
+export type ChatbotsResponse = AxiosResponse<{ data: LiveChatbot[] }>;
+
 export interface SignInScreenProps {
   JSModule: any;
   onLogin: () => void;
@@ -55,22 +57,34 @@ export interface ChatHeaderProps {
   onDrawerToggle?: () => void;
   leftPanelExpanded?: boolean;
   onToggleLeftPanel?: () => void;
-  messages?: Message[]
-  manageProjectsOpen?: boolean
-  onToggleManageProjects?: () => void
+  messages?: Message[];
+  manageProjectsOpen?: boolean;
+  onToggleManageProjects?: () => void;
   sessions?: HistorySessionSummary[];
   setSessions?: Dispatch<SetStateAction<HistorySessionSummary[]>>;
   activeSessionId?: string | null;
   onSelectSession?: (sessionId: string) => void;
   onNewChat?: () => void;
   totalTokensOverride?: number | null;
+  user?: { name?: string; email?: string };
+  onLogout?: () => void;
 }
 
 export interface ChatTabsProps {
-  messages?: Message[]
+  messages?: Message[];
   sessions: HistorySessionSummary[];
   setSessions?: Dispatch<SetStateAction<HistorySessionSummary[]>>;
   activeSessionId?: string | null;
   onSelectSession?: (sessionId: string) => void;
   onNewChat?: () => void;
+}
+
+export interface ChatInputProps {
+  onSubmit: () => void;
+  typingState: boolean;
+  query: string;
+  loading: boolean;
+  onChange: (val: string) => void;
+  messages: Message[];
+  onAddClick?: () => void;
 }
