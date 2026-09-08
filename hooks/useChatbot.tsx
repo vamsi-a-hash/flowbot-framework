@@ -144,6 +144,7 @@ export const useChatbot = () => {
     };
 
     const { JSModule, styles } = useContext(ThemeContext) || {};
+    const [user, setUser] = useState<{ name?: string; email?: string }>({});
 
     // Poll session status: fires on mount, on tab focus, and every 5 min while tab is visible.
     useEffect(() => {
@@ -153,8 +154,9 @@ export const useChatbot = () => {
             if (document.visibilityState !== 'visible') return;
             fetch(AUTH_SESSION_URL)
                 .then(r => r.json())
-                .then(({ isLoggedIn }) => {
+                .then(({ isLoggedIn, name, email }) => {
                     setIsLoggedIn(!!isLoggedIn);
+                    setUser({ name, email });
                     if (!initialised) {
                         setIsCheckingSession(false);
                         initialised = true;
@@ -732,26 +734,25 @@ export const useChatbot = () => {
                         JSModule?.leftPanelStateUpdate(+data.currentStep.header.step);
                     }
                     setIsSignupPage(false);
-                    const apiMessage = {
-                        message: data.text,
-                        src: data.src,
-                        step: data.currentStep || {},
-                        sourceDocs: data.sourceDocuments,
-                        tokens: data.tokens,
-                    };
-                    setMessageState((state: any) => ({
-                        ...state,
-                        messages: pushed
-                            ? state.messages.map((m: any) =>
-                                  m.id === streamId ? { ...m, ...apiMessage } : m
-                              )
-                            : [
-                                  ...state.messages,
-                                  { type: 'apiMessage', ...apiMessage, id: Math.random() },
-                              ],
-                        history: [...state.history, [question, data.text]],
-                    }));
-                    setActiveIndex(data.currentStep.id);
+                    if (data.text) {
+                        setMessageState((state: any) => ({
+                            ...state,
+                            messages: [
+                                ...state.messages,
+                                {
+                                    type: 'apiMessage',
+                                    message: data.text,
+                                    src: data.src,
+                                    step: data.currentStep || {},
+                                    sourceDocs: data.sourceDocuments,
+                                    tokens: data.tokens,
+                                    id: Math.random(),
+                                },
+                            ],
+                            history: [...state.history, [question, data.text]],
+                        }));
+                    }
+                    setActiveIndex(data.currentStep?.id);
                 }
 
                 if (data.currentStep?.inputHidden) {
@@ -906,6 +907,7 @@ export const useChatbot = () => {
         setReferences,
         isLoggedIn,
         isCheckingSession,
+        user,
         hasOpenID,
         handleLogin,
         handleLogout,

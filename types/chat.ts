@@ -64,6 +64,8 @@ export interface ChatHeaderProps {
   onSelectSession?: (sessionId: string) => void;
   onNewChat?: () => void;
   totalTokensOverride?: number | null;
+  user?: { name?: string; email?: string };
+  onLogout?: () => void;
 }
 
 export interface ChatTabsProps {
