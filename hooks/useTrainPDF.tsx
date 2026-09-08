@@ -170,11 +170,7 @@ export const useTainPDF = (activeSessionId?: string) => {
     }, []);
 
     useEffect(() => {
-        // A resumed session's documents live in Mongo history, not under this
-        // tab's jobSessionId, so listSessionDocuments(jobSessionId) can't see
-        // them. When the resume event carries the session's document list,
-        // use it directly; only fall back to the jobSessionId lookup (e.g.
-        // brand-new chat, no history payload) when it doesn't.
+  
         const onSessionResumed = (e: Event) => {
             jobSessionIdRef.current = getJobSessionId();
             const documents = (e as CustomEvent<HistoryDocumentEntry[] | null>).detail;
@@ -235,12 +231,14 @@ export const useTainPDF = (activeSessionId?: string) => {
         }
     };
     const hasActiveFiles = uploads.some(
-        (f: FileUploadStatus) => f.phase === 'uploading' || f.phase === 'processing' || f.phase === 'cancelling'
+        (f: FileUploadStatus) =>
+            (!f.sessionId || f.sessionId === activeSessionId) &&
+            (f.phase === 'uploading' || f.phase === 'processing' || f.phase === 'cancelling')
     );
 
     // move finished uploads into Trained using their polling data (/v1/documents lags)
-    const mergeCompletedIntoTrained = (list: FileUploadStatus[]) => {
-        const completed = list.filter((f) => f.phase === 'done' && f.jobId);
+    const mergeCompletedIntoTrained = (list: FileUploadStatus[], activeSessionId?: string) => {
+        const completed = list.filter((f) => f.phase === 'done' && f.jobId && (!activeSessionId || f.sessionId === activeSessionId));
         if (!completed.length) return;
         setDocumentList((prev) => {
             const existing = new Set(prev.map((d) => d.jobId));
@@ -260,13 +258,21 @@ export const useTainPDF = (activeSessionId?: string) => {
 
     usePolling<void>({
         fn: async () => {
-            const updated = await pollProgress(uploadsRef.current, cancelledRef,chatbotId);
-            setUploads(updated);
-            mergeCompletedIntoTrained(updated);
+            const updated = await pollProgress(uploadsRef.current, cancelledRef, chatbotId);
+            setUploads((prev) => {
+                const updatedMap = new Map(updated.map((u) => [u.jobId, u]));
+                return prev.map((f) => (f.jobId && updatedMap.has(f.jobId) ? updatedMap.get(f.jobId)! : f));
+            });
+            mergeCompletedIntoTrained(updated, activeSessionId);
         },
-        interval: JSModule?.pollingInterval || 400, // configurable polling interval from backend config
+        interval: JSModule?.pollingInterval || 400,
         enabled: hasActiveFiles,
-        shouldStop: () => !uploadsRef.current.some((f: FileUploadStatus) => f.phase === 'uploading' || f.phase === 'processing' || f.phase === 'cancelling'),
+        shouldStop: () =>
+            !uploadsRef.current.some(
+                (f: FileUploadStatus) =>
+                    (!f.sessionId || f.sessionId === activeSessionId) &&
+                    (f.phase === 'uploading' || f.phase === 'processing' || f.phase === 'cancelling')
+            ),
         onComplete: () => setTrainingInProgress(false),
     });
 
@@ -387,37 +393,31 @@ export const useTainPDF = (activeSessionId?: string) => {
         const current = uploadsRef.current.find((f) => f.jobId === jobId);
         if (!current || current.retrying) return;
 
-        setUploads((prev: FileUploadStatus[]) =>
-            prev.map((f) => (f.jobId === jobId ? { ...f, retrying: true } : f))
-        );
+        setUploads((prev) => prev.map((f) => (f.jobId === jobId ? { ...f, retrying: true } : f)));
 
-        const result = await retryDocumentJob(jobId);
-
-        if (!result.ok) {
-            toast(result.message || 'Retry failed', { type: 'error' });
-            setUploads((prev: FileUploadStatus[]) =>
-                prev.map((f) => (f.jobId === jobId ? { ...f, retrying: false } : f))
+        try {
+            const result = await retryDocumentJob(jobId);
+            if (!result.ok) {
+                toast(result.message || 'Retry failed', { type: 'error' });
+                return;
+            }
+            cancelledRef.current.delete(jobId);
+            setTrainingInProgress(true);
+            setUploads((prev) =>
+                prev.map((f) =>
+                    f.jobId === jobId
+                        ? { ...f, phase: 'processing', progress: 0, error: undefined, stage: undefined, retrying: false, startedAt: Date.now() }
+                        : f
+                )
             );
-            return;
+        } catch (err) {
+            console.error('retryUpload failed:', err);
+            toast('Retry failed', { type: 'error' });
+        } finally {
+            setUploads((prev) =>
+                prev.map((f) => (f.jobId === jobId && f.retrying ? { ...f, retrying: false } : f))
+            );
         }
-
-        cancelledRef.current.delete(jobId);
-        setTrainingInProgress(true);
-        setUploads((prev: FileUploadStatus[]) =>
-            prev.map((f) =>
-                f.jobId === jobId
-                    ? {
-                        ...f,
-                        phase: 'processing',
-                        progress: 0,
-                        error: undefined,
-                        stage: undefined,
-                        retrying: false,
-                        startedAt: Date.now(),
-                    }
-                    : f
-            )
-        );
     };
 
     const removeUpload = (jobId: string) => {

@@ -7,7 +7,7 @@ import { getVerifiedEmail } from '@/utils/auth';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'DELETE') {
         const { sessionId, jobId } = req.body || {};
-        if (!sessionId || !jobId) {
+        if (typeof sessionId !== 'string' || !sessionId || typeof jobId !== 'string' || !jobId) {
             return res.status(400).json({ error: 'sessionId and jobId are required' });
         }
         try {
@@ -20,10 +20,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(200).json({ success: true });
         } catch (err: any) {
             if (err.status) {
-                return res.status(err.status).json({ error: err.message });
+                console.error(err.message)
+                return res.status(500).json({ error: "Something went wrong" });
             }
             console.error('Failed to remove document from history:', err);
-            return res.status(500).json({ error: err.message || 'Something went wrong' });
+            return res.status(500).json({ error: 'Something went wrong' });
         }
     }
 
@@ -33,8 +34,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { sessionId, chatbotId, graphId, name, size, type, jobId } = req.body || {};
 
-    if (!sessionId || !graphId || !name) {
-        return res.status(400).json({ error: 'sessionId, graphId and name are required' });
+    if (!sessionId || !graphId || !jobId) {
+        return res.status(400).json({ error: 'sessionId, graphId and jobID are required' });
     }
 
     try {
@@ -45,14 +46,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const userId = await getUserIdByEmail(email);
 
         await upsertUserHistory(sessionId, chatbotId || '', email, userId);
-        await pushDocumentEntry(sessionId, { name, size: size || 0, type: type || '', jobId: jobId || '', graphId });
+        await pushDocumentEntry(sessionId, { name, size: size || 0, type: type || '', jobId: jobId , graphId });
 
         return res.status(200).json({ success: true });
     } catch (err: any) {
-        if (err.status) {
-            return res.status(err.status).json({ error: err.message });
-        }
-        console.error('Failed to record document upload in history:', err);
-        return res.status(500).json({ error: err.message || 'Something went wrong' });
+    if (err.status) {
+        return res.status(500).json({ error: 'something went wrong' });
     }
+    console.error('Failed to record document upload in history:', err);
+    return res.status(500).json({ error: 'Something went wrong' });
+}
 }

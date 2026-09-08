@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import dbConnect from '@/config/mongodb';
 import { UserHistoryModel, IUserHistory, updateSessionStatus } from '@/models/userHistoryModel';
 import { getVerifiedEmail } from '@/utils/auth';
+import { clearCachedSession } from '@/utils/sessionMessagesCache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET' && req.method !== 'DELETE' && req.method !== 'PATCH') {
@@ -26,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         try {
             const result = await UserHistoryModel.deleteOne({ sessionId, email });
+            clearCachedSession(sessionId)
             if (result.deletedCount === 0) {
                 return res.status(404).json({ error: 'Session not found' });
             }

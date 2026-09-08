@@ -377,7 +377,7 @@ export const useChatbot = () => {
             window.handleHeaderPane = JSModule?.handleHeaderPane;
             window.handleLogout = handleLogout;
         }
-    }, [JSModule, isCheckingSession]);
+    }, [JSModule, isCheckingSession,chatId]);
 
     useEffect(() => {
         if (isLoggedIn && JSModule?.handleHeaderPane) {
@@ -570,6 +570,9 @@ export const useChatbot = () => {
                                 console.error('Discarding malformed SSE frame', line);
                                 continue;
                             }
+                            if (myEpoch !== sessionEpochRef.current) {
+                                return;
+                            }
 
                             if (evt.type === 'token') {
                                 setMessageState((state: any) => ({
@@ -601,12 +604,6 @@ export const useChatbot = () => {
                     data = await response.json();
                 }
                 console.log("data", data)
-
-                if (myEpoch !== sessionEpochRef.current) {
-                    // switched to a different chat tab while this request was in
-                    // flight — do not apply a stale response to the live state
-                    return;
-                }
 
                 // it is the case user sent message to human agent;
                 if ( data?.messageHandovered) {

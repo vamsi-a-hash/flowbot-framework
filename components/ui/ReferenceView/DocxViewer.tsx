@@ -31,6 +31,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
 }) => {
   const [renderFailed, setRenderFailed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const renderTokenRef = useRef(0); 
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [zoom, setZoom] = useState<number>(100);
@@ -40,6 +41,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
 
   // Fetch + render the document whenever the file changes.
   useEffect(() => {
+    const myToken = ++renderTokenRef.current;
     let cancelled = false;
     setRenderFailed(false);
     setNumPages(0);
@@ -57,8 +59,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
       try {
         const response = await fetch(fileUrl);
         const blob = await response.blob();
-        if (cancelled || !contentRef.current) return;
-
+        if (cancelled || renderTokenRef.current !== myToken || !contentRef.current) return;
         await renderAsync(blob, contentRef.current, contentRef.current, {
           className: 'docxPage',
           inWrapper: true,
@@ -68,20 +69,19 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
           experimental: true,
           renderAltChunks: false,
         });
-        if (cancelled || !contentRef.current) return;
-
+        if (cancelled || renderTokenRef.current !== myToken || !contentRef.current) return;
         const pages = Array.from(
           contentRef.current.querySelectorAll<HTMLElement>('section.docxPage'),
         );
-        pagesRef.current = pages;
+        pagesRef.current = pages.length ? pages : [contentRef.current];
         setNumPages(pages.length || 1);
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && renderTokenRef.current === myToken) { 
           console.error('DocxViewer render failed:', err);
           setRenderFailed(true);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && renderTokenRef.current === myToken) setLoading(false);
       }
     })();
 
@@ -226,6 +226,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
             transformOrigin: 'top center',
           }}
           ref={contentRef}
+          key={fileUrl}
         />
       </div>
     </div>

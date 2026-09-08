@@ -15,6 +15,7 @@ import HistorySidebar from '@/modules/HistorySidebar';
 import { HistorySessionSummary } from '@/types/history';
 import { listHistorySessions, updateSessionStatus } from '@/apiRequests';
 import { GRAPH_IDS_CHANGED_EVENT, getCurrentSessionId } from '@/utils/sessionJobs';
+import { clearCachedSession } from '@/utils/sessionMessagesCache';
 
 const Chatbot: React.FC = () => {
   const {
@@ -87,6 +88,7 @@ const Chatbot: React.FC = () => {
     // abandoning an empty session -> close it instead of leaving a blank tab behind
     const abandonedSessionId = getCurrentSessionId();
     if (abandonedSessionId && !messages?.length) {
+      clearCachedSession(abandonedSessionId)
       await updateSessionStatus(abandonedSessionId, 'INACTIVE');
       setSessions((prev) => prev.filter((s) => s.sessionId !== abandonedSessionId));
     }
@@ -150,6 +152,13 @@ const Chatbot: React.FC = () => {
       }
     }
   }
+
+  useEffect(() => {
+    latestRequestRef.current += 1;
+    setActiveTabName('chat');
+    setDocumentTreeJSon(null);
+    setDocumentTreeLoading(false);
+  }, [currentSession]);
 
   // Set up window functions immediately (for headerPaneHtml onclick handlers)
   if (typeof window !== 'undefined') {

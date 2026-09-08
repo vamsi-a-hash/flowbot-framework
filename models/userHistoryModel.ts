@@ -223,14 +223,16 @@ export const pullDocumentEntry = async (
     email: string,
     jobId: string
 ): Promise<{ matched: boolean }> => {
-    const result = await UserHistoryModel.findOneAndUpdate(
+    const before = await UserHistoryModel.findOne({ sessionId, email }, { documents: 1 });
+    if (!before) return { matched: false };
+    const hadEntry = before.documents?.some((d: any) => d.jobId === jobId);
+    if (!hadEntry) return { matched: false };
+
+    await UserHistoryModel.updateOne(
         { sessionId, email },
-        {
-            $pull: { documents: { jobId } },
-            $currentDate: { updatedAt: true },
-        }
+        { $pull: { documents: { jobId } }, $currentDate: { updatedAt: true } }
     );
-    return { matched: !!result };
+    return { matched: true };
 };
 
 export default UserHistoryModel;
