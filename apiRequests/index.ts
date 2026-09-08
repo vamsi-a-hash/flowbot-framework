@@ -295,3 +295,27 @@ export const getAllFeedbacks = async (skip: number, limit: number) => {
         }
     }
 }
+
+export const getAllUsers = async (skip: number, limit: number, signal?: AbortSignal) => {
+    try {
+        const response = await axios.get(`/api/users`, {
+            params: { skip, limit },
+            signal
+        });
+        return response.data;
+    } catch (error: any) {
+        if (axios.isCancel(error)) {
+            throw error;
+        }
+        
+        console.log(`something went wrong while fetching users`, {
+            message: error?.message,
+            status: error?.response?.status,
+            responseData: error?.response?.data
+        });
+        return {
+            success: false,
+            errorMessage: error?.message || `something went wrong while fetching users`
+        }
+    }
+}
