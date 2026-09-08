@@ -23,7 +23,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, typingState, que
 
     //prevent empty submissions
     const handleEnter = (e: any) => {
-        if (e.key === 'Enter' && query) {
+        if (e.key === 'Enter' && query.trim()) {
             onSubmit();
         } else if (e.key == 'Enter') {
             e.preventDefault();
@@ -87,7 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, typingState, que
                         />
                         <button
                             type="submit"
-                            disabled={!query || loading}
+                            disabled={!query.trim() || loading}
                             className={styles?.generatebutton}
                             style={{
                                 background:

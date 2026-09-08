@@ -92,21 +92,6 @@
     margin-left: auto;
 }
 
-.viewer :global(.react-pdf__Page__textContent) {
-    color: black !important;
-    position: absolute !important;
-}
-
-.viewer :global(.react-pdf__Page__textContent mark) {
-    color: transparent;
-    background-color: rgba(34, 197, 94, 0.28);
-    padding: 0;
-}
-
-.viewer :global(.react-pdf__Page__canvas) {
-    margin: 0 auto;
-}
-
 .iconBtn {
     display: inline-flex;
     align-items: center;
@@ -156,7 +141,6 @@
     outline-offset: 1px;
 }
 
-/* Tooltip below the control, matching the dark pill in the design. */
 .tip {
     position: relative;
 }
@@ -194,12 +178,6 @@
     min-width: 54px;
 }
 
-.pageWarning {
-    font-size: 12px;
-    color: #b45309;
-    white-space: nowrap;
-}
-
 .pageArea {
     flex: 1;
     min-height: 0;
@@ -208,18 +186,38 @@
     background: #f3f4f6;
 }
 
-.page {
-    display: flex;
-    justify-content: center;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12);
-    overflow: hidden;
-}
-
 .status {
     margin: 24px 0;
     text-align: center;
     font-size: 13px;
     color: #6b7280;
+}
+
+/* Root element docx-preview renders into. Centers the generated page(s)
+   and lets zoom scale them without affecting layout of the surrounding UI. */
+.docxRoot {
+    display: flex;
+    justify-content: center;
+    transition: transform 120ms ease;
+}
+
+.docxRoot :global(.docxPage-wrapper) {
+    background: transparent;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.docxRoot :global(section.docxPage) {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12);
+    margin: 0 !important;
+}
+
+.docxRoot :global(mark[data-hl]) {
+    background-color: rgba(34, 197, 94, 0.35);
+    color: inherit;
+    padding: 0;
 }

@@ -62,14 +62,14 @@ export const start = async (handler, question) => {
         tokenUser = res.data;
       } catch (error) {}
     }
-    let currentStep = await handler.user.getlastStep();
+    let currentStep = handler.user?.getlastStep ? await handler.user.getlastStep() : undefined;
     let answ = ChatBotStep({
       chatBotId,
       tokenUser,
     }).find((item) => item.id == currentStep);
     if (answ === undefined)
       return {
-        text: 'Chatbot flow ended!',
+        text: "Sorry, I don't have an answer for that.",
         currentStep: {
           inputHidden: true,
         },
@@ -104,7 +104,7 @@ export const start = async (handler, question) => {
       }).find((item) => item.id == nextStep);
       if (answ === undefined)
         return {
-          text: 'Chatbot flow ended!',
+          text: "Sorry, I don't have an answer for that.",
           currentStep: {
             inputHidden: true,
           },

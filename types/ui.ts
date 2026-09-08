@@ -40,6 +40,16 @@ export interface PdfViewerProps {
   onClose?: () => void;
 }
 
+export interface DocxViewerProps {
+  fileUrl: string;
+  fileError?: DocumentFileError;
+  highlight?: string;
+  fileName?: string;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  onClose?: () => void;
+}
+
 export interface DrawerProps {
   open: boolean;
   onClose: () => void;

@@ -137,7 +137,29 @@ export default async function handler(
     return new Promise((resolve) => {
       import(`@/configuration/${chatBotId}/server`)
         .then(async (module) => {
+          const isStreaming = Boolean(module.streaming);
+          if (isStreaming) {
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream; charset=utf-8',
+              'Cache-Control': 'no-cache, no-transform',
+            });
+            res.flushHeaders();
+          }
+
+          const sendFinal = (payload: any) => {
+            if (res.destroyed) return;
+            res.write(`data: ${JSON.stringify({ type: 'final', payload })}\n\n`);
+            res.end();
+          };
+
           try {
+            const onToken = isStreaming
+              ? (chunk: string) => {
+                  if (res.destroyed) throw new Error('Client disconnected');
+                  res.write(`data: ${JSON.stringify({ type: 'token', chunk })}\n\n`);
+                }
+              : undefined;
+
             const response = await module.start(
               {
                 chain,
@@ -160,9 +182,80 @@ export default async function handler(
                 htmlToText,
               },
               sanitizedQuestion,
+              onToken,
             );
 
-            // Save Q&A only when there is an actual question and answer
+            // Save Q&A only when there is an actual question and answer, and the
+            if (sanitizedQuestion && response?.text && !res.destroyed) {
+                await saveChatHistory(
+                    session,
+                    chatBotId,
+                    user,
+                    sanitizedQuestion,
+                    response.text,
+                    graphIds || [],
+                    response.tokens
+                );
+            }
+
+            if (isStreaming) {
+              sendFinal(response);
+            } else {
+              res.status(200).json(response);
+            }
+            resolve(response);
+          } catch (error: any) {
+            if (isStreaming) {
+              // Headers are already flushed with a 200 — the error has to travel
+              // in-band, same as the frontend already treats `data.error` today.
+              sendFinal({
+                text: '',
+                src: 'talkingDb',
+                error: true,
+                errorMessage: error?.message || 'Something went wrong',
+              });
+            } else {
+              const upstream = error?.status ?? error?.response?.status;
+              const status =
+                Number.isInteger(upstream) && upstream >= 400 && upstream <= 599
+                  ? upstream
+                  : 500;
+              res
+                .status(status)
+                .json({ error: error?.message || 'Something went wrong' });
+            }
+            resolve(error);
+          }
+        })
+        .catch((error) => {
+    // Fallback to default server config when chatbot-specific one is missing
+          import(`@/configuration/default/server`)
+            .then(async (module) => {
+              try {
+                const response = await module.start(
+                  {
+                    chain,
+                    axiosInstance: axios,
+                    user,
+                    graphIds,
+                    BigQuery,
+                    DocumentProcessorServiceClient,
+                    GoogleAuth,
+                    fs,
+                    path,
+                    FormData,
+                    reqQuery,
+                    chatBotId,
+                    headers,
+                    parser,
+                    generator,
+                    json5,
+                    htmlToText,
+                  },
+                  sanitizedQuestion,
+                );
+
+            // Save Q&A — fallback path
             if (sanitizedQuestion && response?.text) {
                 await saveChatHistory(
                     session,
@@ -175,62 +268,17 @@ export default async function handler(
                 );
             }
 
-            res.status(200).json(response);
-            resolve(response);
-          } catch (error: any) {
-            const upstream = error?.status ?? error?.response?.status;
-            const status =
-              Number.isInteger(upstream) && upstream >= 400 && upstream <= 599
-                ? upstream
-                : 500;
-            res
-              .status(status)
-              .json({ error: error?.message || 'Something went wrong' });
-            resolve(error);
-          }
-        })
-        .catch((error) => {
-    // Fallback to default server config when chatbot-specific one is missing
-          import(`@/configuration/default/server`).then(async (module) => {
-            const response = await module.start(
-              {
-                chain,
-                axiosInstance: axios,
-                user,
-                graphIds,
-                BigQuery,
-                DocumentProcessorServiceClient,
-                GoogleAuth,
-                fs,
-                path,
-                FormData,
-                reqQuery,
-                chatBotId,
-                headers,
-                parser,
-                generator,
-                json5,
-                htmlToText,
-              },
-              sanitizedQuestion,
-            );
-
-        // Save Q&A — fallback path
-        if (sanitizedQuestion && response?.text) {
-            await saveChatHistory(
-                session,
-                chatBotId,
-                user,
-                sanitizedQuestion,
-                response.text,
-                graphIds || [],
-                response.tokens
-            );
-        }
-
-            res.status(200).json(response);
-            resolve(response);
-          });
+                res.status(200).json(response);
+                resolve(response);
+              } catch (fallbackError: any) {
+                res.status(500).json({ error: fallbackError?.message || 'Something went wrong' });
+                resolve(fallbackError);
+              }
+            })
+            .catch((importError) => {
+              res.status(500).json({ error: 'Chat service unavailable' });
+              resolve(importError);
+            });
         });
     });
   } catch (error: any) {

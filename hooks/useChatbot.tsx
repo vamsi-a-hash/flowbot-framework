@@ -507,7 +507,63 @@ export const useChatbot = () => {
                 if (!response.ok) {
                     throw new Error(`Chat request failed: ${response.status}`);
                 }
-                const data = await response.json();
+                let data: any;
+                let pushed = false;
+                const streamId = Math.random();
+
+                if (response.headers.get('content-type')?.startsWith('text/event-stream') && response.body) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    // eslint-disable-next-line no-constant-condition
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const frames = buffer.split('\n\n');
+                        buffer = frames.pop() || '';
+
+                        for (const frame of frames) {
+                            const line = frame.trim();
+                            if (!line.startsWith('data: ')) continue;
+                            let evt: any;
+                            try {
+                                evt = JSON.parse(line.slice(6));
+                            } catch {
+                                console.error('Discarding malformed SSE frame', line);
+                                continue;
+                            }
+
+                            if (evt.type === 'token') {
+                                setMessageState((state: any) => ({
+                                    ...state,
+                                    messages: pushed
+                                        ? state.messages.map((m: any) =>
+                                              m.id === streamId ? { ...m, message: m.message + evt.chunk } : m
+                                          )
+                                        : [
+                                              ...state.messages,
+                                              {
+                                                  type: 'apiMessage',
+                                                  message: evt.chunk,
+                                                  src: 'talkingDb',
+                                                  id: streamId,
+                                              },
+                                          ],
+                                }));
+                                pushed = true;
+                            } else if (evt.type === 'final') {
+                                data = evt.payload;
+                            }
+                        }
+                    }
+                    if (!data) {
+                        throw new Error('Stream ended before the final frame');
+                    }
+                } else {
+                    data = await response.json();
+                }
                 console.log("data", data)
 
                 // it is the case user sent message to human agent;
@@ -653,12 +709,12 @@ export const useChatbot = () => {
                         }));
                     }
                 } else {
-                    if (data.currentStep.fullWidth) {
+                    if (data.currentStep?.fullWidth) {
                         setRegistrationMessage(data.currentStep);
                         setIsSignupPage(true);
                         return;
                     }
-                    if (!data.hideAnswer && (data.currentStep.answer || question) && !JSModule?.showUserResponseFirst) {
+                    if (!data.hideAnswer && (data.currentStep?.answer || question) && !JSModule?.showUserResponseFirst) {
                         setMessageState((state: any) => ({
                             ...state,
                             messages: [
@@ -672,24 +728,27 @@ export const useChatbot = () => {
                             ],
                         }));
                     }
-                    if (data.currentStep.update) {
+                    if (data.currentStep?.update) {
                         JSModule?.leftPanelStateUpdate(+data.currentStep.header.step);
                     }
                     setIsSignupPage(false);
+                    const apiMessage = {
+                        message: data.text,
+                        src: data.src,
+                        step: data.currentStep || {},
+                        sourceDocs: data.sourceDocuments,
+                        tokens: data.tokens,
+                    };
                     setMessageState((state: any) => ({
                         ...state,
-                        messages: [
-                            ...state.messages,
-                            {
-                                type: 'apiMessage',
-                                message: data.text,
-                                src: data.src,
-                                step: data.currentStep || {},
-                                sourceDocs: data.sourceDocuments,
-                                tokens: data.tokens,
-                                id: Math.random(),
-                            },
-                        ],
+                        messages: pushed
+                            ? state.messages.map((m: any) =>
+                                  m.id === streamId ? { ...m, ...apiMessage } : m
+                              )
+                            : [
+                                  ...state.messages,
+                                  { type: 'apiMessage', ...apiMessage, id: Math.random() },
+                              ],
                         history: [...state.history, [question, data.text]],
                     }));
                     setActiveIndex(data.currentStep.id);

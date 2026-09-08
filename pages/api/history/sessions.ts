@@ -78,8 +78,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     chats:     record.chats,
                 };
 
-                console.log(`[GET /api/history/sessions?sessionId=${sessionId}] user=${email}`);
-                console.log(JSON.stringify(response, null, 2));
 
                 return res.status(200).json(response);
             } catch (err: any) {
@@ -109,9 +107,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 createdAt:     s.createdAt,
                 firstQuestion: s.chats?.[0]?.question || null,
             }));
-
-            console.log(`[GET /api/history/sessions] user=${email} sessions=${response.length}`);
-            console.log(JSON.stringify(response, null, 2));
 
             return res.status(200).json(response);
         } catch (err: any) {

@@ -3,6 +3,7 @@ import You from "@/assets/svgs/You";
 import ToolTip from "@/assets/svgs/icons/ToolTip";
 import LoadingDots from "@/components/ui/LoadingDots";
 import ReferenceViewer from "@/components/ui/ReferenceView/ReferenceView";
+import DocxViewer from "@/components/ui/ReferenceView/DocxViewer";
 import ThemeContext from "@/contexts/ThemeContext";
 import Image from "next/image";
 import { Fragment, useContext, useRef, useEffect, useState } from "react";
@@ -16,6 +17,7 @@ import { Document } from "langchain/document";
 import SourcePanel from "./SourcePanel";
 import { getDocumentFile } from "@/apiRequests/ttt";
 import { DocumentFileError } from "@/types/ui";
+import { isDocx } from "@/components/ui/ReferenceView/ReferenceView";
 
 interface ChatMessageProps {
     chatId: string;
@@ -234,8 +236,9 @@ export const ChatMessages: React.FC<ChatMessageProps> = ({ chatId, messages, loa
 
                     {/* TODO: Move Icon to conf */}
                     {messages.map((message, index) => {
+                            const hasSources = !!message?.sourceDocs?.length;
                             const hasFooter = message?.type === 'apiMessage' &&
-                                (message?.tokens || (message?.sourceDocs && message.sourceDocs.length > 0));
+                                (message?.tokens || hasSources);
                             let icon;
                             let className;
                             if (message.type === 'apiMessage') {
@@ -410,7 +413,7 @@ export const ChatMessages: React.FC<ChatMessageProps> = ({ chatId, messages, loa
                                                             }}
                                                           >
                                                             {message?.tokens && <TokenUsagePill usage={message.tokens} />}
-                                                            {message?.sourceDocs && message.sourceDocs.length > 0 && (
+                                                            {hasSources && (
                                                               <button
                                                                 className={`${styles.referenceButton}`}
                                                                 style={{ position: 'static', height: 36 }}
@@ -493,11 +496,26 @@ export const ChatMessages: React.FC<ChatMessageProps> = ({ chatId, messages, loa
             {
                 JSModule?.referenceDocumentViewEnabled && openedGraphId && openedSource && (
                     <div style={documentColumnStyle(docExpanded)}>
+                        { isDocx(openedSource.metadata?.filename ) ? (
+                            <DocxViewer
+                                key={openedGraphId}
+                                fileUrl={fileUrl}
+                                fileError={fileError}
+                                highlight={openedSource.pageContent}
+                                fileName={openedSource.metadata?.filename}
+                                expanded={docExpanded}
+                                onToggleExpand={() => setDocExpanded(prev => !prev)}
+                                onClose={() => {
+                                    setOpenedSource(null);
+                                    setDocExpanded(false);
+                                }}
+                            />
+                        ) : (
                         <ReferenceViewer
                             key={`${openedGraphId}:${openedSource.metadata?.pageNumber}`}
                             fileUrl={fileUrl}
                             fileError={fileError}
-                            pageNumber={Number(openedSource.metadata?.pageNumber) || 1}
+                            pageNumber={Number(openedSource.metadata?.pageNumber)}
                             highlight={openedSource.pageContent}
                             fileName={openedSource.metadata?.filename}
                             expanded={docExpanded}
@@ -507,6 +525,7 @@ export const ChatMessages: React.FC<ChatMessageProps> = ({ chatId, messages, loa
                                 setDocExpanded(false);
                             }}
                         />
+                    )}
                     </div>
                 )
             }

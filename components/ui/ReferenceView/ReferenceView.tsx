@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
+import DocxViewer from './DocxViewer';
 import {
   ChevronLeft,
   ChevronRight,
@@ -46,6 +47,9 @@ const clampPage = (page: number, numPages: number): number => {
   return numPages > 0 ? Math.min(safePage, numPages) : safePage;
 };
 
+const isValidPageNumber = (page: number): boolean =>
+  Number.isFinite(page) && page >= 1;
+
 const PdfViewer: React.FC<PdfViewerProps> = ({
   fileUrl: pdfUrl,
   fileError,
@@ -59,6 +63,9 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
   const [renderFailed, setRenderFailed] = useState<boolean>(false);
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(clampPage(pageNumber, 0));
+  const [pageUnavailable, setPageUnavailable] = useState<boolean>(
+    !isValidPageNumber(pageNumber)
+  );
   const [zoom, setZoom] = useState<number>(100);
   const pageAreaRef = useRef<HTMLDivElement>(null);
   const [fitWidth, setFitWidth] = useState<number>(600);
@@ -147,6 +154,14 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
           <span className={styles.pageIndicator}>
             {currentPage} / {numPages || '…'}
           </span>
+          {pageUnavailable && (
+            <span
+              className={styles.pageWarning}
+              title="The cited page could not be shown; displaying the nearest available page instead."
+            >
+              Page unavailable
+            </span>
+          )}
           <button
             className={styles.iconBtn}
             onClick={() => setCurrentPage(currentPage + 1)}
@@ -201,6 +216,9 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
             onLoadSuccess={({ numPages }) => {
               setNumPages(numPages);
               setCurrentPage((page) => clampPage(page, numPages));
+              if (isValidPageNumber(pageNumber) && pageNumber > numPages) {
+                setPageUnavailable(true);
+              }
             }}
             onLoadError={() => setRenderFailed(true)}
           >
@@ -210,9 +228,10 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
                 width={Math.round((fitWidth * zoom) / 100)}
                 customTextRenderer={customTextRenderer}
                 renderAnnotationLayer={false}
-                onLoadError={() =>
-                  setCurrentPage((page) => clampPage(page, numPages))
-                }
+                onLoadError={() => {
+                  setPageUnavailable(true);
+                  setCurrentPage((page) => clampPage(page, numPages));
+                }}
               />
             </div>
           </Document>
@@ -222,4 +241,10 @@ const PdfViewer: React.FC<PdfViewerProps> = ({
   );
 };
 
-export default PdfViewer;
+export const isDocx = (fileName?: string) =>
+  !!fileName && /\.docx?$/i.test(fileName);
+
+const ReferenceViewer: React.FC<PdfViewerProps> = (props) =>
+  isDocx(props.fileName) ? <DocxViewer {...props} /> : <PdfViewer {...props} />;
+
+export default ReferenceViewer;

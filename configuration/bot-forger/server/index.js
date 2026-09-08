@@ -519,10 +519,19 @@ export const start = async (handler, question) => {
       } catch (error) {}
     }
 
-    let currentStep = await handler.user.getlastStep();
+    let currentStep = handler.user?.getlastStep ? await handler.user.getlastStep() : undefined;
     let answ = ChatBotStep({ chatBotId, tokenUser }).find(
       (item) => item.id == currentStep,
     );
+
+    if (answ === undefined)
+      return {
+        text: "Sorry, I don't have an answer for that.",
+        currentStep: {
+          inputHidden: true,
+        },
+        src: 'talkingDb',
+      };
 
     if (answ.preHook) {
       const { nextStep, error } = await answ.preHook(handler, question);
