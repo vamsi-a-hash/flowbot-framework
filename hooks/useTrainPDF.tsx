@@ -147,6 +147,11 @@ export const useTainPDF = (activeSessionId?: string) => {
 
     uploadsRef.current = uploads;
 
+    const bumpVersion = (f: FileUploadStatus): FileUploadStatus => ({
+        ...f,
+        _version: (f._version || 0) + 1,
+    });
+
     useEffect(() => {
         jobSessionIdRef.current = getJobSessionId();
         rehydrateSession();
@@ -238,7 +243,10 @@ export const useTainPDF = (activeSessionId?: string) => {
 
     // move finished uploads into Trained using their polling data (/v1/documents lags)
     const mergeCompletedIntoTrained = (list: FileUploadStatus[], activeSessionId?: string) => {
-        const completed = list.filter((f) => f.phase === 'done' && f.jobId && (!activeSessionId || f.sessionId === activeSessionId));
+        const liveJobIds = new Set(uploadsRef.current.map((f) => f.jobId).filter(Boolean));
+        const completed = list.filter(
+            (f) => f.phase === 'done' && f.jobId && liveJobIds.has(f.jobId) && (!activeSessionId || f.sessionId === activeSessionId)
+        );
         if (!completed.length) return;
         setDocumentList((prev) => {
             const existing = new Set(prev.map((d) => d.jobId));
@@ -258,10 +266,44 @@ export const useTainPDF = (activeSessionId?: string) => {
 
     usePolling<void>({
         fn: async () => {
+            // snapshot versions at the start of this tick
+            const versionsAtStart = new Map(uploadsRef.current.map((f) => [f.jobId, f._version || 0]));
             const updated = await pollProgress(uploadsRef.current, cancelledRef, chatbotId);
             setUploads((prev) => {
                 const updatedMap = new Map(updated.map((u) => [u.jobId, u]));
-                return prev.map((f) => (f.jobId && updatedMap.has(f.jobId) ? updatedMap.get(f.jobId)! : f));
+                return prev.map((f) => {
+                    if (!f.jobId || !updatedMap.has(f.jobId)) return f;
+                    // skip entries whose version changed since this tick started —
+                    // a cancel/retry landed locally while getJobProgress was in flight
+                    if ((f._version || 0) !== versionsAtStart.get(f.jobId)) return f;
+                    return updatedMap.get(f.jobId)!;
+                });
+            });
+            mergeCompletedIntoTrained(updated, activeSessionId);
+        },
+        interval: JSModule?.pollingInterval || 400, // configurable polling interval from backend config
+        enabled: hasActiveFiles,
+        shouldStop: () =>
+            !uploadsRef.current.some(
+                (f: FileUploadStatus) =>
+                    (!f.sessionId || f.sessionId === activeSessionId) &&
+                    (f.phase === 'uploading' || f.phase === 'processing' || f.phase === 'cancelling')
+            ),
+        onComplete: () => setTrainingInProgress(false),
+    });
+
+    usePolling<void>({
+        fn: async () => {
+            // snapshot versions at the start of this tick
+            const versionsAtStart = new Map(uploadsRef.current.map((f) => [f.jobId, f._version || 0]));
+            const updated = await pollProgress(uploadsRef.current, cancelledRef, chatbotId);
+            setUploads((prev) => {
+                const updatedMap = new Map(updated.map((u) => [u.jobId, u]));
+                return prev.map((f) => {
+                    if (!f.jobId || !updatedMap.has(f.jobId)) return f;
+                    if ((f._version || 0) !== versionsAtStart.get(f.jobId)) return f;
+                    return updatedMap.get(f.jobId)!;
+                });
             });
             mergeCompletedIntoTrained(updated, activeSessionId);
         },
@@ -366,7 +408,7 @@ export const useTainPDF = (activeSessionId?: string) => {
         if (!jobId) return
 
         setUploads((prev: FileUploadStatus[]) =>
-            prev.map((f) => f.jobId === jobId ? { ...f, phase: 'cancelling', progress: 0 } : f)
+            prev.map((f) => f.jobId === jobId ? bumpVersion({ ...f, phase: 'cancelling', progress: 0 }) : f)
         );
 
         const response = await cancelDocumentProcessing(jobId);
@@ -374,7 +416,7 @@ export const useTainPDF = (activeSessionId?: string) => {
         if (!response) {
             toast("Document processing cancellation failed", { type: "error" });
             setUploads((prev: FileUploadStatus[]) =>
-                prev.map((f) => (f.jobId === jobId && f.phase === 'cancelling') ? { ...f, phase: 'processing' } : f)
+                prev.map((f) => (f.jobId === jobId && f.phase === 'cancelling') ? bumpVersion({ ...f, phase: 'processing' }) : f)
             );
             return;
         }
@@ -382,7 +424,7 @@ export const useTainPDF = (activeSessionId?: string) => {
         if (response?.state === 'CANCELLED') {
             cancelledRef.current.add(jobId);
             setUploads((prev: FileUploadStatus[]) =>
-                prev.map((f) => f.jobId === jobId ? { ...f, phase: 'cancelled', error: 'Upload cancelled', progress: 0 } : f)
+                prev.map((f) => f.jobId === jobId ? bumpVersion({ ...f, phase: 'cancelled', error: 'Upload cancelled', progress: 0 }) : f)
             );
         }
     };
@@ -393,7 +435,7 @@ export const useTainPDF = (activeSessionId?: string) => {
         const current = uploadsRef.current.find((f) => f.jobId === jobId);
         if (!current || current.retrying) return;
 
-        setUploads((prev) => prev.map((f) => (f.jobId === jobId ? { ...f, retrying: true } : f)));
+        setUploads((prev: FileUploadStatus[]) =>prev.map((f) => (f.jobId === jobId ? bumpVersion({ ...f, retrying: true }) : f)));
 
         try {
             const result = await retryDocumentJob(jobId);
@@ -403,10 +445,10 @@ export const useTainPDF = (activeSessionId?: string) => {
             }
             cancelledRef.current.delete(jobId);
             setTrainingInProgress(true);
-            setUploads((prev) =>
+            setUploads((prev: FileUploadStatus[]) =>
                 prev.map((f) =>
                     f.jobId === jobId
-                        ? { ...f, phase: 'processing', progress: 0, error: undefined, stage: undefined, retrying: false, startedAt: Date.now() }
+                        ? bumpVersion({...f, phase: 'processing', progress: 0, error: undefined, stage: undefined, retrying: false, startedAt: Date.now() })
                         : f
                 )
             );
@@ -414,8 +456,8 @@ export const useTainPDF = (activeSessionId?: string) => {
             console.error('retryUpload failed:', err);
             toast('Retry failed', { type: 'error' });
         } finally {
-            setUploads((prev) =>
-                prev.map((f) => (f.jobId === jobId && f.retrying ? { ...f, retrying: false } : f))
+            setUploads((prev: FileUploadStatus[]) =>
+                prev.map((f) => (f.jobId === jobId && f.retrying ? bumpVersion({ ...f, retrying: false }) : f))
             );
         }
     };

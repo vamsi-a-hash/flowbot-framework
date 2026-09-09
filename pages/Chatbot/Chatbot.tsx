@@ -234,7 +234,6 @@ const Chatbot: React.FC = () => {
           activeSessionId={currentSession}
           onSelectSession={handleSelectSession}
           onNewChat={handleNewChat}
-          totalTokensOverride={selectedSessionId ? pastConversationTokens : undefined}
           user={user}
           onLogout={handleLogout}
         />

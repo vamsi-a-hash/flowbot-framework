@@ -27,7 +27,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         try {
             const result = await UserHistoryModel.deleteOne({ sessionId, email });
-            clearCachedSession(sessionId)
             if (result.deletedCount === 0) {
                 return res.status(404).json({ error: 'Session not found' });
             }

@@ -34,8 +34,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { sessionId, chatbotId, graphId, name, size, type, jobId } = req.body || {};
 
-    if (!sessionId || !graphId || !jobId) {
-        return res.status(400).json({ error: 'sessionId, graphId and jobID are required' });
+    if (
+        typeof sessionId !== 'string' || !sessionId ||
+        typeof graphId !== 'string' || !graphId ||
+        typeof jobId !== 'string' || !jobId
+    ) {
+        return res.status(400).json({ error: 'sessionId, graphId, and jobId are required' });
     }
 
     try {

@@ -3,6 +3,7 @@ import { MessageSquare, Plus, MoreVertical, Trash2, Eye } from 'lucide-react';
 import { deleteHistorySession } from '@/apiRequests';
 import { MenuItem, ConfirmDialog, EmptyState } from '@/components/ui';
 import { HistorySessionSummary, HistorySidebarProps } from '@/types/history';
+import { clearCachedSession } from '@/utils/sessionMessagesCache';
 
 const COLORS = {
     accent: '#3b82f6',
@@ -46,6 +47,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
         setDeleting(false);
         // 404 = already gone → treat as removed. Only a real failure (500/network) errors.
         if (ok || status === 404) {
+            clearCachedSession(pendingDelete.sessionId)
             setSessions((prev) => prev.filter((s) => s.sessionId !== pendingDelete.sessionId));
             if (selectedSessionId === pendingDelete.sessionId) {
                 onNewChat(); // deleted the session we were viewing → back to live chat
