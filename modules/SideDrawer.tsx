@@ -169,7 +169,7 @@ const UploadsSection: React.FC<UploadsSectionProps> = ({
             <div className={styles?.['uploadsHeader']}>Uploads ({activeUploads.length})</div>
             {activeUploads.map((file) => (
                 <UploadFileCard
-                    key={file.jobId}
+                    key={file.jobId ?? file.name}
                     styles={styles}
                     file={file}
                     canCancel={canCancel}

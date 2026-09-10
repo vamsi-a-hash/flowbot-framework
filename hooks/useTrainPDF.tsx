@@ -174,32 +174,6 @@ export const useTainPDF = (activeSessionId?: string) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    useEffect(() => {
-  
-        const onSessionResumed = (e: Event) => {
-            jobSessionIdRef.current = getJobSessionId();
-            const documents = (e as CustomEvent<HistoryDocumentEntry[] | null>).detail;
-            if (documents) {
-                setUploads((prev) => prev.filter((u) => u.phase !== 'done'));
-                setDocumentList(
-                    documents
-                        .filter((doc) => doc.graphId)
-                        .map((doc) => ({
-                            jobId: doc.jobId,
-                            fileName: doc.name,
-                            fileSize: doc.size,
-                            graphId: doc.graphId,
-                        }))
-                );
-                return;
-            }
-            rehydrateSession();
-        };
-        window.addEventListener(RESUME_SESSION_EVENT, onSessionResumed);
-        return () => window.removeEventListener(RESUME_SESSION_EVENT, onSessionResumed);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // completed docs -> Trained; still-processing -> Uploads (polling resumes them)
     const rehydrateSession = async () => {
         const jobSessionId = jobSessionIdRef.current;
