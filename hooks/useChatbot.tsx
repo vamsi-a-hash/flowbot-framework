@@ -593,22 +593,25 @@ export const useChatbot = () => {
                             }
 
                             if (evt.type === 'token') {
-                                setMessageState((state: any) => ({
-                                    ...state,
-                                    messages: pushed
-                                        ? state.messages.map((m: any) =>
-                                              m.id === streamId ? { ...m, message: m.message + evt.chunk } : m
-                                          )
-                                        : [
-                                              ...state.messages,
-                                              {
-                                                  type: 'apiMessage',
-                                                  message: evt.chunk,
-                                                  src: 'talkingDb',
-                                                  id: streamId,
-                                              },
-                                          ],
-                                }));
+                                setMessageState((state: any) => {
+                                    const exists = state.messages.some((m: any) => m.id === streamId);
+                                    return {
+                                        ...state,
+                                        messages: exists
+                                            ? state.messages.map((m: any) =>
+                                                  m.id === streamId ? { ...m, message: m.message + evt.chunk } : m
+                                              )
+                                            : [
+                                                  ...state.messages,
+                                                  {
+                                                      type: 'apiMessage',
+                                                      message: evt.chunk,
+                                                      src: 'talkingDb',
+                                                      id: streamId,
+                                                  },
+                                              ],
+                                    };
+                                });
                                 pushed = true;
                             } else if (evt.type === 'final') {
                                 data = evt.payload;
@@ -788,22 +791,40 @@ export const useChatbot = () => {
                     }
                     setIsSignupPage(false);
                     if (data.text) {
-                        setMessageState((state: any) => ({
-                            ...state,
-                            messages: [
-                                ...state.messages,
-                                {
-                                    type: 'apiMessage',
-                                    message: data.text,
-                                    src: data.src,
-                                    step: data.currentStep || {},
-                                    sourceDocs: data.sourceDocuments,
-                                    tokens: data.tokens,
-                                    id: Math.random(),
-                                },
-                            ],
-                            history: [...state.history, [question, data.text]],
-                        }));
+                        setMessageState((state: any) => {
+                            // A streamed answer already has a bubble (id === streamId) built up token by
+                            // token; finalize it in place instead of appending a duplicate full-text bubble.
+                            const streamedMessageExists = pushed && state.messages.some((m: any) => m.id === streamId);
+                            return {
+                                ...state,
+                                messages: streamedMessageExists
+                                    ? state.messages.map((m: any) =>
+                                          m.id === streamId
+                                              ? {
+                                                    ...m,
+                                                    message: data.text,
+                                                    src: data.src,
+                                                    step: data.currentStep || {},
+                                                    sourceDocs: data.sourceDocuments,
+                                                    tokens: data.tokens,
+                                                }
+                                              : m
+                                      )
+                                    : [
+                                          ...state.messages,
+                                          {
+                                              type: 'apiMessage',
+                                              message: data.text,
+                                              src: data.src,
+                                              step: data.currentStep || {},
+                                              sourceDocs: data.sourceDocuments,
+                                              tokens: data.tokens,
+                                              id: Math.random(),
+                                          },
+                                      ],
+                                history: [...state.history, [question, data.text]],
+                            };
+                        });
                     }
                     setActiveIndex(data.currentStep?.id);
                 }
