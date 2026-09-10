@@ -198,7 +198,7 @@
 .docxRoot {
     display: flex;
     justify-content: center;
-    transition: transform 120ms ease;
+    transition: zoom 120ms ease;
 }
 
 .docxRoot :global(.docxPage-wrapper) {

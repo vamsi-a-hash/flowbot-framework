@@ -37,6 +37,25 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
 
   const contentRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLElement[]>([]);
+  const pageAreaRef = useRef<HTMLDivElement>(null);
+  const [nativeWidth, setNativeWidth] = useState<number>(0);
+  const [fitScale, setFitScale] = useState<number>(1);
+
+  const recomputeFitScale = (widthOverride?: number) => {
+    const container = pageAreaRef.current;
+    const width = widthOverride ?? nativeWidth;
+    if (!container || !width) return;
+    const available = Math.max(240, container.clientWidth - 32);
+    setFitScale(available / width);
+  };
+
+  useEffect(() => {
+    const el = pageAreaRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => recomputeFitScale());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [nativeWidth]);
 
   // Fetch + render the document whenever the file changes.
   useEffect(() => {
@@ -44,6 +63,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
     setRenderFailed(false);
     setNumPages(0);
     setCurrentPage(1);
+    setNativeWidth(0);
     pagesRef.current = [];
 
     const container = contentRef.current;
@@ -75,10 +95,14 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
         );
         pagesRef.current = pages;
         setNumPages(pages.length || 1);
+        contentRef.current.style.zoom = '1';
+        const width = pages[0]?.offsetWidth || 0;
+        setNativeWidth(width);
+        recomputeFitScale(width);
       } catch (err) {
         if (!cancelled) {
-+         console.error('DocxViewer render failed:', err);
-+         setRenderFailed(true);
+         console.error('DocxViewer render failed:', err);
+         setRenderFailed(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -90,7 +114,6 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
     };
   }, [fileUrl]);
 
-  // Re-apply highlighting whenever the content or the cited passage changes.
     // Re-apply highlighting whenever the content or the cited passage changes.
   useEffect(() => {
       const container = contentRef.current;
@@ -119,6 +142,7 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
   const failureMessage = fileErrorMessage(fileError as DocumentFileError | undefined, renderFailed);
   const title = fileName || 'Document';
   const downloadName = fileName || 'document.docx';
+  const totalScale = (fitScale * zoom) / 100;
 
   return (
     <div className={styles.viewer}>
@@ -215,16 +239,15 @@ const DocxViewer: React.FC<DocxViewerProps> = ({
         )}
       </div>
 
-      <div className={styles.pageArea}>
+      <div className={styles.pageArea} ref={pageAreaRef}>
         {failureMessage && <p className={styles.status}>{failureMessage}</p>}
         {!failureMessage && loading && <p className={styles.status}>Loading…</p>}
         <div
           className={styles.docxRoot}
           style={{
             display: failureMessage ? 'none' : 'block',
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: 'top center',
-          }}
+            zoom: totalScale || 1,
+          } as React.CSSProperties}
           ref={contentRef}
         />
       </div>
